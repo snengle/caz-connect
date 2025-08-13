@@ -4,6 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Caz Connect</title>
+
+    <!-- PWA Manifest Link -->
+    <link rel="manifest" href="manifest.json">
+    <!-- Theme color for browser UI -->
+    <meta name="theme-color" content="#16213e">
+
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
@@ -12,16 +18,7 @@
 </head>
 <body>
     <div class="main-container">
-        <!-- This is now a direct child of the container for better layout control -->
-        <div class="title-container">
-            <img id="mascot" src="professor-caz.png" alt="Professor Caz Mascot">
-            <div class="title-text-group">
-                <h1>Caz Connect</h1>
-                <h2>A Game of Gravity & Connection</h2>
-            </div>
-        </div>
-
-        <!-- This contains the board and status, which can be positioned independently -->
+        <!-- Game Area is first in the HTML for mobile-first layout -->
         <div class="game-area">
             <div id="status-area">
                 <p id="status-text">Player X's Turn</p>
@@ -36,8 +33,16 @@
             </div>
         </div>
 
-        <!-- This area now only contains controls and rules -->
+        <!-- Info Area is second, re-ordered by CSS on larger screens -->
         <div class="info-area">
+            <div class="title-container">
+                <img id="mascot" src="professor-caz.png" alt="Professor Caz Mascot">
+                <div class="title-text-group">
+                    <h1>Caz Connect</h1>
+                    <h2>A Game of Gravity & Connection</h2>
+                </div>
+            </div>
+
             <div id="game-controls">
                 <div class="control-group">
                     <label for="game-mode">Mode:</label>
@@ -46,7 +51,7 @@
                         <option value="pvp">Player vs. Player</option>
                     </select>
                 </div>
-                <div class="control-group" id="difficulty-selector">
+                <div class="control-group hidden" id="difficulty-selector">
                     <label for="difficulty-level">Difficulty:</label>
                     <select id="difficulty-level">
                         <option value="easy">Easy</option>
@@ -74,5 +79,18 @@
     </div>
 
     <script src="script.js"></script>
+
+    <!-- PWA Service Worker Registration -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js').then(registration => {
+                    console.log('Service Worker registered with scope:', registration.scope);
+                }).catch(error => {
+                    console.log('Service Worker registration failed:', error);
+                });
+            });
+        }
+    </script>
 </body>
 </html>

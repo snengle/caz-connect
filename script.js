@@ -17,7 +17,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const AI_PLAYER = PLAYER_O;
     const HUMAN_PLAYER = PLAYER_X;
 
-    // --- AI Positional Strategy Map ---
+    // AI Positional Strategy Map
     const POSITIONAL_VALUE_MAP = [
         [3, 4, 5, 7, 7, 5, 4, 3], [4, 6, 8, 10, 10, 8, 6, 4], [5, 8, 11, 13, 13, 11, 8, 5],
         [7, 10, 13, 16, 16, 13, 10, 7], [7, 10, 13, 16, 16, 13, 10, 7], [5, 8, 11, 13, 13, 11, 8, 5],
@@ -60,22 +60,30 @@ document.addEventListener('DOMContentLoaded', () => {
     const renderBoard = () => {
         boardElement.innerHTML = '';
         const validMoves = getValidMoves(board, movesMade);
-        for (let r = 0; r < BOARD_SIZE; r++) { for (let c = 0; c < BOARD_SIZE; c++) {
-            const cell = document.createElement('div');
-            cell.classList.add('cell');
-            cell.dataset.row = r; cell.dataset.col = c;
-            if (board[r][c]) {
-                cell.classList.add(board[r][c]); cell.textContent = board[r][c];
+        for (let r = 0; r < BOARD_SIZE; r++) {
+            for (let c = 0; c < BOARD_SIZE; c++) {
+                const cell = document.createElement('div');
+                cell.classList.add('cell');
+                cell.dataset.row = r;
+                cell.dataset.col = c;
+                if (board[r][c]) {
+                    cell.classList.add(board[r][c]);
+                    cell.textContent = board[r][c];
+                }
+                if (r === lastMove.r && c === lastMove.c) {
+                    cell.classList.add('last-move');
+                }
+                const isPotentiallyValid = validMoves.some(move => move.r === r && move.c === c);
+                if (!gameOver && isPotentiallyValid) {
+                    cell.classList.add('valid');
+                    cell.addEventListener('click', handleCellClick);
+                    if (gameMode === 'pvc' && difficulty === 'easy' && currentPlayer === HUMAN_PLAYER) {
+                        cell.classList.add('valid-move-hint');
+                    }
+                }
+                boardElement.appendChild(cell);
             }
-             if(r === lastMove.r && c === lastMove.c) {
-                cell.classList.add('last-move');
-            }
-            if (!gameOver && validMoves.some(move => move.r === r && move.c === c)) {
-                cell.classList.add('valid');
-                cell.addEventListener('click', handleCellClick);
-            }
-            boardElement.appendChild(cell);
-        }}
+        }
     };
 
     // --- CORE GAME LOGIC (Single Source of Truth) ---
@@ -86,7 +94,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (currentMovesMade === 0) return isOnWall(r, c);
         if (isOnWall(r, c)) return true;
 
-        // Check UP for a valid supporting piece
         if (r > 0 && currentBoard[r - 1][c]) {
             let pathIsGood = true;
             for (let i = r - 1; i >= 0; i--) {
@@ -94,8 +101,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             if (pathIsGood) return true;
         }
-
-        // Check DOWN
         if (r < BOARD_SIZE - 1 && currentBoard[r + 1][c]) {
             let pathIsGood = true;
             for (let i = r + 1; i < BOARD_SIZE; i++) {
@@ -103,8 +108,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             if (pathIsGood) return true;
         }
-
-        // Check LEFT
         if (c > 0 && currentBoard[r][c - 1]) {
             let pathIsGood = true;
             for (let i = c - 1; i >= 0; i--) {
@@ -112,8 +115,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             if (pathIsGood) return true;
         }
-
-        // Check RIGHT
         if (c < BOARD_SIZE - 1 && currentBoard[r][c + 1]) {
             let pathIsGood = true;
             for (let i = c + 1; i < BOARD_SIZE; i++) {
@@ -121,22 +122,30 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             if (pathIsGood) return true;
         }
-
         return false;
     };
 
     const getValidMoves = (currentBoard, currentMovesMade) => {
         const moves = [];
         if (gameOver) return moves;
-        for (let r=0;r<BOARD_SIZE;r++) for (let c=0;c<BOARD_SIZE;c++) if(isValidMove(r,c,currentBoard,currentMovesMade)) moves.push({r,c});
+        for (let r = 0; r < BOARD_SIZE; r++) {
+            for (let c = 0; c < BOARD_SIZE; c++) {
+                if (isValidMove(r, c, currentBoard, currentMovesMade)) {
+                    moves.push({ r, c });
+                }
+            }
+        }
         return moves;
     };
 
     // --- Game Flow & Player Actions ---
     const handleCellClick = (event) => {
-        if (gameOver || (gameMode==='pvc' && currentPlayer===AI_PLAYER)) return;
-        const r=parseInt(event.target.dataset.row), c=parseInt(event.target.dataset.col);
-        if (isValidMove(r, c, board, movesMade)) makeMove(r, c);
+        if (gameOver || (gameMode === 'pvc' && currentPlayer === AI_PLAYER)) return;
+        const r = parseInt(event.target.dataset.row);
+        const c = parseInt(event.target.dataset.col);
+        if (isValidMove(r, c, board, movesMade)) {
+            makeMove(r, c);
+        }
     };
 
     const makeMove = (r, c) => {
@@ -144,7 +153,6 @@ document.addEventListener('DOMContentLoaded', () => {
         board[r][c] = currentPlayer;
         movesMade++;
         lastMove = { r, c };
-
         const winInfo = checkWin(currentPlayer, board);
         if (winInfo) {
             gameOver = true;
@@ -156,10 +164,8 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
             currentPlayer = (currentPlayer === PLAYER_X) ? PLAYER_O : PLAYER_X;
         }
-
         updateStatus();
         renderBoard();
-
         if (!gameOver && gameMode === 'pvc' && currentPlayer === AI_PLAYER) {
             boardElement.classList.add('ai-thinking');
             setTimeout(computerMove, 50);
@@ -172,42 +178,60 @@ document.addEventListener('DOMContentLoaded', () => {
         setTimeout(() => {
             let bestMove;
             const validMoves = getValidMoves(board, movesMade);
-            if(validMoves.length === 0) {
+            if (validMoves.length === 0) {
                 boardElement.classList.remove('ai-thinking');
                 return;
             }
 
             const difficultySettings = {
-                easy: { depth: 0 },
                 medium: { depth: 2, strategic: false },
                 hard: { depth: 3, strategic: true },
                 expert: { depth: 4, strategic: true }
             };
-            const setting = difficultySettings[difficulty];
 
             if (difficulty === 'easy') {
-                bestMove = validMoves[Math.floor(Math.random() * validMoves.length)];
+                let easyBestMove = validMoves[0];
+                let bestScore = -Infinity;
+                for (const move of validMoves) {
+                    const tempBoard = board.map(row => [...row]);
+                    tempBoard[move.r][move.c] = AI_PLAYER;
+                    const score = scorePositionTactical(tempBoard, AI_PLAYER);
+                    if (score > bestScore) {
+                        bestScore = score;
+                        easyBestMove = move;
+                    }
+                }
+                bestMove = easyBestMove;
             } else {
+                const setting = difficultySettings[difficulty];
                 const scoringFunction = setting.strategic ? scorePositionStrategic : scorePositionTactical;
                 bestMove = minimax(board, movesMade, setting.depth, -Infinity, Infinity, true, scoringFunction).move;
             }
 
             boardElement.classList.remove('ai-thinking');
-            if (bestMove) makeMove(bestMove.r, bestMove.c);
-            else if (validMoves.length > 0) makeMove(validMoves[0].r, validMoves[0].c);
+            if (bestMove) {
+                makeMove(bestMove.r, bestMove.c);
+            } else if (validMoves.length > 0) {
+                makeMove(validMoves[0].r, validMoves[0].c);
+            }
         }, 50);
     };
 
+    // --- AI Scoring Functions ---
     const scorePositionTactical = (currentBoard, player) => {
         let score = 0;
         const opponent = player === AI_PLAYER ? HUMAN_PLAYER : AI_PLAYER;
-        for (let r=0; r<8; r++) { for (let c=0; c<8; c++) {
-            [[0,1],[1,0],[1,1],[1,-1]].forEach(([dr,dc]) => {
-                if(r+3*dr<8 && r+3*dr>=0 && c+3*dc<8 && c+3*dc>=0) {
-                    const w = [currentBoard[r][c], currentBoard[r+dr][c+dc], currentBoard[r+2*dr][c+2*dc], currentBoard[r+3*dr][c+3*dc]];
-                    const pC=w.filter(p=>p===player).length, oC=w.filter(p=>p===opponent).length, eC=w.filter(p=>p===null).length;
-                    if(pC===4) score+=100000; else if(pC===3&&eC===1) score+=100; else if(pC===2&&eC===2) score+=10;
-                    if(oC===3&&eC===1) score-=800;
+        for (let r = 0; r < 8; r++) { for (let c = 0; c < 8; c++) {
+            [[0, 1], [1, 0], [1, 1], [1, -1]].forEach(([dr, dc]) => {
+                if (r + 3 * dr < 8 && r + 3 * dr >= 0 && c + 3 * dc < 8 && c + 3 * dc >= 0) {
+                    const w = [currentBoard[r][c], currentBoard[r + dr][c + dc], currentBoard[r + 2 * dr][c + 2 * dc], currentBoard[r + 3 * dr][c + 3 * dc]];
+                    const pC = w.filter(p => p === player).length;
+                    const oC = w.filter(p => p === opponent).length;
+                    const eC = w.filter(p => p === null).length;
+                    if (pC === 4) score += 100000;
+                    else if (pC === 3 && eC === 1) score += 100;
+                    else if (pC === 2 && eC === 2) score += 10;
+                    if (oC === 3 && eC === 1) score -= 800;
                 }
             });
         }}
@@ -216,9 +240,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const scorePositionStrategic = (currentBoard, player) => {
         let score = scorePositionTactical(currentBoard, player);
         const opponent = player === AI_PLAYER ? HUMAN_PLAYER : AI_PLAYER;
-        for(let r=0;r<8;r++) for(let c=0;c<8;c++) {
-            if(currentBoard[r][c]===player) score += POSITIONAL_VALUE_MAP[r][c];
-            else if(currentBoard[r][c]===opponent) score -= POSITIONAL_VALUE_MAP[r][c];
+        for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
+            if (currentBoard[r][c] === player) score += POSITIONAL_VALUE_MAP[r][c];
+            else if (currentBoard[r][c] === opponent) score -= POSITIONAL_VALUE_MAP[r][c];
         }
         return score;
     };
@@ -237,17 +261,19 @@ document.addEventListener('DOMContentLoaded', () => {
         if (maximizingPlayer) {
             let maxEval = -Infinity;
             for (const move of validMoves) {
-                const newBoard = currentBoard.map(r=>[...r]); newBoard[move.r][move.c] = AI_PLAYER;
+                const newBoard = currentBoard.map(r => [...r]);
+                newBoard[move.r][move.c] = AI_PLAYER;
                 const { score } = minimax(newBoard, currentMovesMade + 1, depth - 1, alpha, beta, false, scoringFunction);
                 if (score > maxEval) { maxEval = score; bestMove = move; }
                 alpha = Math.max(alpha, score);
                 if (beta <= alpha) break;
             }
             return { score: maxEval, move: bestMove };
-        } else { // Minimizing player
+        } else {
             let minEval = Infinity;
             for (const move of validMoves) {
-                const newBoard = currentBoard.map(r=>[...r]); newBoard[move.r][move.c] = HUMAN_PLAYER;
+                const newBoard = currentBoard.map(r => [...r]);
+                newBoard[move.r][move.c] = HUMAN_PLAYER;
                 const { score } = minimax(newBoard, currentMovesMade + 1, depth - 1, alpha, beta, true, scoringFunction);
                 if (score < minEval) { minEval = score; bestMove = move; }
                 beta = Math.min(beta, score);
@@ -259,11 +285,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Win Checking and UI Updates ---
     const checkWin = (player, currentBoard) => {
-        for (let r=0;r<8;r++) { for (let c=0;c<8;c++) {
-            if (c + 3 < 8 && [0,1,2,3].every(i=>currentBoard[r][c+i]===player)) return Array(4).fill(null).map((_,i)=>({r,c:c+i}));
-            if (r + 3 < 8 && [0,1,2,3].every(i=>currentBoard[r+i][c]===player)) return Array(4).fill(null).map((_,i)=>({r:r+i,c}));
-            if (r + 3 < 8&&c + 3 < 8 && [0,1,2,3].every(i=>currentBoard[r+i][c+i]===player)) return Array(4).fill(null).map((_,i)=>({r:r+i,c:c+i}));
-            if (r - 3 >= 0&&c + 3 < 8 && [0,1,2,3].every(i=>currentBoard[r-i][c+i]===player)) return Array(4).fill(null).map((_,i)=>({r:r-i,c:c+i}));
+        for (let r = 0; r < 8; r++) { for (let c = 0; c < 8; c++) {
+            if (c + 3 < 8 && [0, 1, 2, 3].every(i => currentBoard[r][c + i] === player)) return Array(4).fill(null).map((_, i) => ({ r, c: c + i }));
+            if (r + 3 < 8 && [0, 1, 2, 3].every(i => currentBoard[r + i][c] === player)) return Array(4).fill(null).map((_, i) => ({ r: r + i, c }));
+            if (r + 3 < 8 && c + 3 < 8 && [0, 1, 2, 3].every(i => currentBoard[r + i][c + i] === player)) return Array(4).fill(null).map((_, i) => ({ r: r + i, c: c + i }));
+            if (r - 3 >= 0 && c + 3 < 8 && [0, 1, 2, 3].every(i => currentBoard[r - i][c + i] === player)) return Array(4).fill(null).map((_, i) => ({ r: r - i, c: c + i }));
         }}
         return null;
     };
