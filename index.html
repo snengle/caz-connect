@@ -4,22 +4,31 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Caz Connect</title>
-
-    <!-- PWA Manifest Link -->
-    <link rel="manifest" href="manifest.json">
-    <!-- Theme color for browser UI -->
-    <meta name="theme-color" content="#16213e">
-
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
     <link rel="icon" href="professor-caz.png" type="image/png">
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#16213e">
 </head>
 <body>
     <div class="main-container">
-        <!-- Game Area is first in the HTML for mobile-first layout -->
-        <div class="game-area">
+        <!-- Title is now its own section at the top -->
+        <header class="title-container">
+            <img id="mascot" src="professor-caz.png" alt="Professor Caz Mascot">
+            <div class="title-text-group">
+                <h1>Caz Connect</h1>
+                <h2>A Game of Gravity & Connection</h2>
+            </div>
+        </header>
+
+        <!-- Game Area contains the board and status/score -->
+        <main class="game-area">
+            <div class="board-container">
+                <div id="game-board"></div>
+                <div id="winning-line"></div>
+            </div>
             <div id="status-area">
                 <p id="status-text">Player X's Turn</p>
                 <div id="score-board">
@@ -27,22 +36,10 @@
                     <span class="score-item">Player O: <span id="player-o-score">0</span></span>
                 </div>
             </div>
-            <div class="board-container">
-                <div id="game-board"></div>
-                <div id="winning-line"></div>
-            </div>
-        </div>
+        </main>
 
-        <!-- Info Area is second, re-ordered by CSS on larger screens -->
-        <div class="info-area">
-            <div class="title-container">
-                <img id="mascot" src="professor-caz.png" alt="Professor Caz Mascot">
-                <div class="title-text-group">
-                    <h1>Caz Connect</h1>
-                    <h2>A Game of Gravity & Connection</h2>
-                </div>
-            </div>
-
+        <!-- Info Area contains controls and rules -->
+        <aside class="info-area">
             <div id="game-controls">
                 <div class="control-group">
                     <label for="game-mode">Mode:</label>
@@ -55,14 +52,14 @@
                     <label for="difficulty-level">Difficulty:</label>
                     <select id="difficulty-level">
                         <option value="easy">Easy</option>
-                        <option value="medium">Medium</option>
+                        <option value="medium" selected>Medium</option>
                         <option value="hard">Hard</option>
-                        <option value="expert" selected>Expert</option>
+                        <option value="expert">Expert</option>
                     </select>
                 </div>
                 <button id="reset-button">New Game</button>
             </div>
-
+            
             <div id="rules">
                 <h3>Rules</h3>
                 <ol>
@@ -75,20 +72,15 @@
                     </li>
                 </ol>
             </div>
-        </div>
+        </aside>
     </div>
-
+    
     <script src="script.js"></script>
-
-    <!-- PWA Service Worker Registration -->
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/sw.js').then(registration => {
-                    console.log('Service Worker registered with scope:', registration.scope);
-                }).catch(error => {
-                    console.log('Service Worker registration failed:', error);
-                });
+                navigator.serviceWorker.register('/sw.js').then(reg => console.log('Service Worker registered.'))
+                .catch(err => console.log('Service Worker registration failed: ', err));
             });
         }
     </script>
