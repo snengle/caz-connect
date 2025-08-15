@@ -14,7 +14,7 @@
 </head>
 <body>
     <div class="main-container">
-        <!-- Title is now its own section at the top -->
+
         <header class="title-container">
             <img id="mascot" src="professor-caz.png" alt="Professor Caz Mascot">
             <div class="title-text-group">
@@ -23,7 +23,6 @@
             </div>
         </header>
 
-        <!-- Game Area contains the board and status/score -->
         <main class="game-area">
             <div class="board-container">
                 <div id="game-board"></div>
@@ -38,7 +37,6 @@
             </div>
         </main>
 
-        <!-- Info Area contains controls and rules -->
         <aside class="info-area">
             <div id="game-controls">
                 <div class="control-group">
@@ -59,7 +57,7 @@
                 </div>
                 <button id="reset-button">New Game</button>
             </div>
-            
+
             <div id="rules">
                 <h3>Rules</h3>
                 <ol>
@@ -74,7 +72,7 @@
             </div>
         </aside>
     </div>
-    
+
     <script src="script.js"></script>
     <script>
         if ('serviceWorker' in navigator) {
