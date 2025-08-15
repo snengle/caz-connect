@@ -51,6 +51,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (!gameOver && gameMode === 'pvc' && currentPlayer === AI_PLAYER) {
             boardElement.classList.add('ai-thinking');
+            updateStatus();
             setTimeout(computerMove, 500);
         }
     };
@@ -89,34 +90,26 @@ document.addEventListener('DOMContentLoaded', () => {
         if (currentMovesMade === 0) return isOnWall(r, c);
         if (isOnWall(r, c)) return true;
 
-        // Check UP for a valid supporting piece
         if (r > 0 && currentBoard[r - 1][c]) {
             let pathIsGood = true;
             for (let i = r - 1; i >= 0; i--) { if (!currentBoard[i][c]) { pathIsGood = false; break; } }
             if (pathIsGood) return true;
         }
-
-        // Check DOWN
         if (r < BOARD_SIZE - 1 && currentBoard[r + 1][c]) {
             let pathIsGood = true;
             for (let i = r + 1; i < BOARD_SIZE; i++) { if (!currentBoard[i][c]) { pathIsGood = false; break; } }
             if (pathIsGood) return true;
         }
-
-        // Check LEFT
         if (c > 0 && currentBoard[r][c - 1]) {
             let pathIsGood = true;
             for (let i = c - 1; i >= 0; i--) { if (!currentBoard[r][i]) { pathIsGood = false; break; } }
             if (pathIsGood) return true;
         }
-
-        // Check RIGHT
         if (c < BOARD_SIZE - 1 && currentBoard[r][c + 1]) {
             let pathIsGood = true;
             for (let i = c + 1; i < BOARD_SIZE; i++) { if (!currentBoard[r][i]) { pathIsGood = false; break; } }
             if (pathIsGood) return true;
         }
-
         return false;
     };
 
@@ -145,7 +138,6 @@ document.addEventListener('DOMContentLoaded', () => {
             gameOver = true;
             if (currentPlayer === PLAYER_X) playerXScore++; else playerOScore++;
             updateScoreDisplay();
-            drawWinningLine(winInfo);
         } else if (getValidMoves(board, movesMade).length === 0) {
             gameOver = true;
         } else {
@@ -153,17 +145,21 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         updateStatus();
-        renderBoard();
+        renderBoard(); // Render first to show the move
+
+        if (winInfo) {
+            drawWinningLine(winInfo); // Draw line after rendering
+        }
 
         if (!gameOver && gameMode === 'pvc' && currentPlayer === AI_PLAYER) {
             boardElement.classList.add('ai-thinking');
+            updateStatus();
             setTimeout(computerMove, 50);
         }
     };
 
     // --- AI Brain & Difficulty Dispatcher ---
     const computerMove = () => {
-        boardElement.classList.add('ai-thinking');
         setTimeout(() => {
             let bestMove;
             const validMoves = getValidMoves(board, movesMade);
@@ -173,37 +169,26 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             const difficultySettings = {
-                easy: { depth: 1, strategic: false },
+                easy:   { depth: 1, strategic: false },
                 medium: { depth: 2, strategic: false },
-                hard: { depth: 3, strategic: true },
-                expert: { depth: 4, strategic: true }
+                hard:   { depth: 3, strategic: true },
+                expert: { depth: movesMade > 20 ? 4 : 3, strategic: true }
             };
             const setting = difficultySettings[difficulty];
 
             if (difficulty === 'easy') {
-                let easyBestMove = validMoves[0];
-                let bestScore = -Infinity;
-                for (const move of validMoves) {
-                    const tempBoard = board.map(row => [...row]);
-                    tempBoard[move.r][move.c] = AI_PLAYER;
-                    const score = scorePositionTactical(tempBoard, AI_PLAYER);
-                    if (score > bestScore) {
-                        bestScore = score;
-                        easyBestMove = move;
-                    }
-                }
-                bestMove = easyBestMove;
+                bestMove = validMoves[Math.floor(Math.random() * validMoves.length)];
             } else {
                 const scoringFunction = setting.strategic ? scorePositionStrategic : scorePositionTactical;
                 bestMove = minimax(board, movesMade, setting.depth, -Infinity, Infinity, true, scoringFunction).move;
             }
 
-            boardElement.classList.remove('ai-thinking');
             if (bestMove) makeMove(bestMove.r, bestMove.c);
             else if (validMoves.length > 0) makeMove(validMoves[0].r, validMoves[0].c);
         }, 50);
     };
 
+    // --- AI Scoring Functions ---
     const scorePositionTactical = (currentBoard, player) => {
         let score = 0;
         const opponent = player === AI_PLAYER ? HUMAN_PLAYER : AI_PLAYER;
@@ -221,10 +206,9 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     const scorePositionStrategic = (currentBoard, player) => {
         let score = scorePositionTactical(currentBoard, player);
-        const opponent = player === AI_PLAYER ? HUMAN_PLAYER : AI_PLAYER;
         for(let r=0;r<8;r++) for(let c=0;c<8;c++) {
             if(currentBoard[r][c]===player) score += POSITIONAL_VALUE_MAP[r][c];
-            else if(currentBoard[r][c]===opponent) score -= POSITIONAL_VALUE_MAP[r][c];
+            else if(currentBoard[r][c]!==null) score -= POSITIONAL_VALUE_MAP[r][c];
         }
         return score;
     };
@@ -302,7 +286,11 @@ document.addEventListener('DOMContentLoaded', () => {
             const winnerInfo = checkWin(PLAYER_X, board) || checkWin(PLAYER_O, board);
             statusText.textContent = winnerInfo ? `Player ${board[winnerInfo[0].r][winnerInfo[0].c]} Wins!` : "It's a Draw!";
         } else {
-            statusText.textContent = `Player ${currentPlayer}'s Turn`;
+            if (gameMode === 'pvc' && currentPlayer === AI_PLAYER) {
+                statusText.textContent = "Professor Caz is thinking...";
+            } else {
+                statusText.textContent = `Player ${currentPlayer}'s Turn`;
+            }
         }
     };
 
