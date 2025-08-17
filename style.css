@@ -61,7 +61,7 @@ main.game-area {
     order: 2; /* Status/score comes after board on mobile */
     width: 100%;
     text-align: center;
-    margin-top: 15px; /* Add space above scoreboard */
+    margin-top: 15px;
     margin-bottom: 0;
 }
 
@@ -127,7 +127,7 @@ select, button {
     background-color: #000;
     border-radius: 10px;
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
-    transition: cursor 0.3s ease;
+    transition: cursor 0.3s ease, opacity 0.3s ease;
 }
 #game-board.ai-thinking { cursor: wait; opacity: 0.6; }
 
@@ -156,11 +156,47 @@ select, button {
 #winning-line {
     position: absolute; background-color: var(--winning-line-color); height: 5px;
     border-radius: 5px; box-shadow: 0 0 15px var(--winning-line-color);
-    transform-origin: left center; display: none;
+    transform-origin: left center; display: none; 
 }
 
 #rules { text-align: center; font-size: 0.9rem; background: var(--board-bg); padding: 5px 20px 15px 20px; border-radius: 12px; width: 90%; box-sizing: border-box; }
 #rules ul { text-align: left; }
+
+/* --- PWA Install Prompt Styles --- */
+#install-prompt-container {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: 15px;
+    background-color: var(--board-bg);
+    box-shadow: 0 -5px 15px rgba(0, 0, 0, 0.3);
+    z-index: 1000;
+    transform: translateY(120%);
+    transition: transform 0.4s ease-in-out;
+}
+#install-prompt-container.visible {
+    transform: translateY(0);
+}
+#install-prompt-container.hidden {
+    display: none;
+}
+.install-prompt-content {
+    max-width: 600px;
+    margin: 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 15px;
+    flex-wrap: wrap;
+}
+.install-prompt-text { flex-grow: 1; }
+.install-prompt-content h3 { margin: 0 0 5px 0; color: var(--sub-text-color); font-size: 1.2rem; }
+.install-prompt-content p { margin: 0; font-size: 0.9rem; line-height: 1.4; }
+.install-prompt-buttons { display: flex; gap: 10px; flex-shrink: 0; }
+.install-prompt-buttons button { padding: 8px 16px; font-weight: 600; }
+.install-accept { background-color: var(--player-o-color); color: var(--bg-color); }
+.install-decline { background-color: var(--cell-bg); }
 
 /* --- Tablet & Desktop Layout --- */
 @media (min-width: 901px) {
@@ -178,24 +214,24 @@ select, button {
         align-items: start;
         gap: 40px;
     }
-
+    
     header.title-container { grid-area: title; flex-direction: row; justify-content: flex-start; text-align: left; }
     main.game-area { grid-area: game; min-width: 525px; justify-content: center; }
     aside.info-area { grid-area: info; justify-content: flex-start; }
-
-    .board-container { order: 2; } /* Board after status on desktop */
-    #status-area { order: 1; margin-bottom: 20px; margin-top: 0; }
+    
+    .board-container { order: 1; }
+    #status-area { order: 2; margin-top: 0; margin-bottom: 20px; }
 
     #mascot { height: 110px; width: 110px; }
     .title-text-group { text-align: left; }
     h1 { font-size: 2.8rem; }
     h2 { font-size: 1.3rem; }
+    
     #game-controls { flex-direction: row; justify-content: center; width: 100%; box-sizing: border-box; flex-wrap: wrap;}
+    
     #game-board {
-        grid-template-columns: repeat(8, 60px);
-        grid-template-rows: repeat(8, 60px);
+        grid-template-columns: repeat(8, 60px); grid-template-rows: repeat(8, 60px);
         gap: 5px; padding: 5px;
-        max-width: none; max-height: none;
     }
     .cell {
         width: 60px; height: 60px; font-size: 40px; border-radius: 8px;
@@ -204,68 +240,6 @@ select, button {
     #score-board { font-size: 1.1rem; }
     #rules { width: 100%; }
 }
-/* --- PWA Install Prompt Styles --- */
-#install-prompt-container {
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    padding: 15px;
-    background-color: var(--board-bg);
-    box-shadow: 0 -5px 15px rgba(0, 0, 0, 0.3);
-    z-index: 1000;
-    transform: translateY(100%);
-    transition: transform 0.3s ease-in-out;
-}
-
-#install-prompt-container.visible {
-    transform: translateY(0);
-}
-
-#install-prompt-container.hidden {
-    display: block; /* Keep it in the DOM for transitions */
-}
-
-.install-prompt-content {
-    max-width: 600px;
-    margin: 0 auto;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 15px;
-}
-
-.install-prompt-content h3 {
-    margin: 0;
-    color: var(--sub-text-color);
-    font-size: 1.2rem;
-}
-
-.install-prompt-content p {
-    margin: 0;
-    flex-grow: 1;
-    font-size: 0.9rem;
-}
-
-.install-prompt-buttons {
-    display: flex;
-    gap: 10px;
-}
-
-.install-prompt-buttons button {
-    padding: 8px 16px;
-    font-weight: 600;
-}
-
-.install-accept {
-    background-color: var(--player-o-color);
-    color: var(--bg-color);
-}
-
-.install-decline {
-    background-color: var(--cell-bg);
-}
-
 @media (max-width: 600px) {
     .install-prompt-content {
         flex-direction: column;
@@ -274,5 +248,6 @@ select, button {
     .install-prompt-buttons {
         width: 100%;
         justify-content: center;
+        margin-top: 10px;
     }
 }
