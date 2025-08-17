@@ -14,7 +14,7 @@
 </head>
 <body>
     <div class="main-container">
-        <!-- Title Container (includes mascot and mute button) -->
+        <!-- Title is first for all screen sizes -->
         <header class="title-container">
             <div class="title-left">
                 <img id="mascot" src="professor-caz.png" alt="Professor Caz Mascot">
@@ -31,16 +31,16 @@
 
         <!-- Game Area (board and status) -->
         <main class="game-area">
+            <div class="board-container">
+                <div id="game-board"></div>
+                <div id="winning-line"></div>
+            </div>
             <div id="status-area">
                 <p id="status-text">Player X's Turn</p>
                 <div id="score-board">
                     <span class="score-item">Player X: <span id="player-x-score">0</span></span>
                     <span class="score-item">Player O: <span id="player-o-score">0</span></span>
                 </div>
-            </div>
-            <div class="board-container">
-                <div id="game-board"></div>
-                <div id="winning-line"></div>
             </div>
         </main>
 
@@ -65,7 +65,6 @@
                 </div>
                 <button id="reset-button">New Game</button>
             </div>
-
             <div id="rules">
                 <h3>Instructions</h3>
                 <p align="left"><strong>Objective: </strong> Get 4 X's in a row to win!</p>
@@ -74,7 +73,6 @@
         </aside>
     </div>
 
-    <!-- PWA Install Prompt Modal -->
     <div id="install-prompt-container" class="hidden">
         <div class="install-prompt-content">
             <div class="install-prompt-text">
