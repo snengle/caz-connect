@@ -16,7 +16,102 @@
     <div class="main-container">
 
         <header class="title-container">
+            <img id="mascot" src="professor-caz.png" alt="Professor Caz Mascot"><!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Caz Connect</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <link rel="icon" href="professor-caz.png" type="image/png">
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#16213e">
+</head>
+<body>
+    <div class="main-container">
+        <!-- (The rest of your main-container remains exactly the same) -->
+        <header class="title-container">
             <img id="mascot" src="professor-caz.png" alt="Professor Caz Mascot">
+            <div class="title-text-group">
+                <h1>Caz Connect</h1>
+                <h2>A Game of Gravity & Connection</h2>
+            </div>
+        </header>
+        <main class="game-area">
+            <div id="status-area">
+                <p id="status-text">Player X's Turn</p>
+                <div id="score-board">
+                    <span class="score-item">Player X: <span id="player-x-score">0</span></span>
+                    <span class="score-item">Player O: <span id="player-o-score">0</span></span>
+                </div>
+            </div>
+            <div class="board-container">
+                <div id="game-board"></div>
+                <div id="winning-line"></div>
+            </div>
+        </main>
+        <aside class="info-area">
+            <div id="game-controls">
+                <div class="control-group">
+                    <label for="game-mode">Mode:</label>
+                    <select id="game-mode">
+                        <option value="pvc">Player vs. Computer</option>
+                        <option value="pvp">Player vs. Player</option>
+                    </select>
+                </div>
+                <div class="control-group hidden" id="difficulty-selector">
+                    <label for="difficulty-level">Difficulty:</label>
+                    <select id="difficulty-level">
+                        <option value="easy">Easy</option>
+                        <option value="medium" selected>Medium</option>
+                        <option value="hard">Hard</option>
+                        <option value="expert">Expert</option>
+                    </select>
+                </div>
+                <button id="reset-button">New Game</button>
+            </div>
+            <div id="rules">
+                <h3>Rules</h3>
+                <ol>
+                    <li>The <strong>first move</strong> must be on an outer wall.</li>
+                    <li>A subsequent move is valid if it is either:
+                        <ul>
+                            <li>(A) On any empty square on the <strong>outer wall</strong>.</li>
+                            <li>(B) Touching a piece that has a solid, straight line back to a wall.</li>
+                        </ul>
+                    </li>
+                </ol>
+            </div>
+        </aside>
+    </div>
+
+    <!-- NEW: PWA Install Prompt Modal -->
+    <div id="install-prompt-container" class="hidden">
+        <div class="install-prompt-content">
+            <h3>Install Caz Connect</h3>
+            <p>Add Caz Connect to your home screen for quick access and offline play!</p>
+            <div class="install-prompt-buttons">
+                <button id="install-button" class="install-accept">Install</button>
+                <button id="install-later-button" class="install-decline">Later</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js').then(reg => console.log('Service Worker registered.'))
+                .catch(err => console.log('Service Worker registration failed: ', err));
+            });
+        }
+    </script>
+</body>
+</html>
+
             <div class="title-text-group">
                 <h1>Caz Connect</h1>
                 <h2>A Game of Gravity & Connection</h2>
