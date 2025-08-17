@@ -9,14 +9,17 @@ document.addEventListener('DOMContentLoaded', () => {
     const winningLineElement = document.getElementById('winning-line');
     const playerXScoreEl = document.getElementById('player-x-score');
     const playerOScoreEl = document.getElementById('player-o-score');
-    
+    const installPromptContainer = document.getElementById('install-prompt-container');
+    const installButton = document.getElementById('install-button');
+    const installLaterButton = document.getElementById('install-later-button');
+
     // --- Constants ---
     const BOARD_SIZE = 8;
     const PLAYER_X = 'X';
     const PLAYER_O = 'O';
     const AI_PLAYER = PLAYER_O;
     const HUMAN_PLAYER = PLAYER_X;
-    
+
     // AI Positional Strategy Map
     const POSITIONAL_VALUE_MAP = [
         [3, 4, 5, 7, 7, 5, 4, 3], [4, 6, 8, 10, 10, 8, 6, 4], [5, 8, 11, 13, 13, 11, 8, 5],
@@ -26,10 +29,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Game State ---
     let board, currentPlayer, movesMade, gameOver, gameMode, difficulty;
-    let firstPlayer = PLAYER_O; 
+    let firstPlayer = PLAYER_O;
     let lastMove = { r: null, c: null };
     let playerXScore = 0;
     let playerOScore = 0;
+    let deferredInstallPrompt = null;
+
+    // --- PWA Install Prompt ---
+    window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        deferredInstallPrompt = e;
+        console.log('`beforeinstallprompt` event was fired and saved.');
+    });
 
     // --- Game Initialization ---
     const initializeGame = () => {
@@ -41,11 +52,12 @@ document.addEventListener('DOMContentLoaded', () => {
         lastMove = { r: null, c: null };
         gameMode = gameModeSelect.value;
         difficulty = difficultyLevelSelect.value;
-        
+
+        if (installPromptContainer) installPromptContainer.classList.remove('visible');
         difficultySelector.classList.toggle('hidden', gameMode !== 'pvc');
         winningLineElement.style.display = 'none';
         boardElement.classList.remove('ai-thinking');
-        
+
         updateScoreDisplay();
         updateStatus();
         renderBoard();
@@ -56,8 +68,7 @@ document.addEventListener('DOMContentLoaded', () => {
             setTimeout(computerMove, 500);
         }
     };
-
-    // --- UI & Rendering ---
+        // --- UI & Rendering ---
     const renderBoard = () => {
         boardElement.innerHTML = '';
         const validMoves = getValidMoves(board, movesMade);
@@ -82,7 +93,7 @@ document.addEventListener('DOMContentLoaded', () => {
             boardElement.appendChild(cell);
         }}
     };
-    
+
     // --- CORE GAME LOGIC (Single Source of Truth) ---
     const isOnWall = (r, c) => r === 0 || r === BOARD_SIZE - 1 || c === 0 || c === BOARD_SIZE - 1;
 
@@ -91,29 +102,37 @@ document.addEventListener('DOMContentLoaded', () => {
         if (currentMovesMade === 0) return isOnWall(r, c);
         if (isOnWall(r, c)) return true;
 
+        // Check UP for a valid supporting piece
         if (r > 0 && currentBoard[r - 1][c]) {
             let pathIsGood = true;
             for (let i = r - 1; i >= 0; i--) { if (!currentBoard[i][c]) { pathIsGood = false; break; } }
             if (pathIsGood) return true;
         }
+
+        // Check DOWN
         if (r < BOARD_SIZE - 1 && currentBoard[r + 1][c]) {
             let pathIsGood = true;
             for (let i = r + 1; i < BOARD_SIZE; i++) { if (!currentBoard[i][c]) { pathIsGood = false; break; } }
             if (pathIsGood) return true;
         }
+
+        // Check LEFT
         if (c > 0 && currentBoard[r][c - 1]) {
             let pathIsGood = true;
             for (let i = c - 1; i >= 0; i--) { if (!currentBoard[r][i]) { pathIsGood = false; break; } }
             if (pathIsGood) return true;
         }
+
+        // Check RIGHT
         if (c < BOARD_SIZE - 1 && currentBoard[r][c + 1]) {
             let pathIsGood = true;
             for (let i = c + 1; i < BOARD_SIZE; i++) { if (!currentBoard[r][i]) { pathIsGood = false; break; } }
             if (pathIsGood) return true;
         }
+
         return false;
     };
-    
+
     const getValidMoves = (currentBoard, currentMovesMade) => {
         const moves = [];
         if (gameOver) return moves;
@@ -127,7 +146,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const r=parseInt(event.target.dataset.row), c=parseInt(event.target.dataset.col);
         if (isValidMove(r, c, board, movesMade)) makeMove(r, c);
     };
-    
+
     const makeMove = (r, c) => {
         if (gameOver) return;
         board[r][c] = currentPlayer;
@@ -144,12 +163,16 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
             currentPlayer = (currentPlayer === PLAYER_X) ? PLAYER_O : PLAYER_X;
         }
-        
+
         updateStatus();
-        renderBoard(); 
-        
+        renderBoard();
+
         if (winInfo) {
             drawWinningLine(winInfo);
+        }
+
+        if (gameOver) {
+            setTimeout(showInstallPrompt, 1500);
         }
 
         if (!gameOver && gameMode === 'pvc' && currentPlayer === AI_PLAYER) {
@@ -158,10 +181,8 @@ document.addEventListener('DOMContentLoaded', () => {
             setTimeout(computerMove, 50);
         }
     };
-
-    // --- AI Brain & Difficulty Dispatcher ---
+        // --- AI Brain & Difficulty Dispatcher ---
     const computerMove = () => {
-        boardElement.classList.add('ai-thinking');
         setTimeout(() => {
             let bestMove;
             const validMoves = getValidMoves(board, movesMade);
@@ -174,17 +195,42 @@ document.addEventListener('DOMContentLoaded', () => {
                 easy:   { depth: 1, strategic: false },
                 medium: { depth: 2, strategic: false },
                 hard:   { depth: 3, strategic: true },
-                expert: { depth: movesMade > 20 ? 4 : 3, strategic: true }
+                expert: { depth: movesMade > 20 ? 4 : 3, strategic: true } // Adaptive Depth
             };
             const setting = difficultySettings[difficulty];
 
             if (difficulty === 'easy') {
-                bestMove = validMoves[Math.floor(Math.random() * validMoves.length)];
+                // 1. Check if AI can win in one move
+                for (const move of validMoves) {
+                    const tempBoard = board.map(r => [...r]);
+                    tempBoard[move.r][move.c] = AI_PLAYER;
+                    if (checkWin(AI_PLAYER, tempBoard)) {
+                        bestMove = move;
+                        break;
+                    }
+                }
+
+                // 2. If no win, check if player must be blocked
+                if (!bestMove) {
+                    for (const move of validMoves) {
+                        const tempBoard = board.map(r => [...r]);
+                        tempBoard[move.r][move.c] = HUMAN_PLAYER;
+                        if (checkWin(HUMAN_PLAYER, tempBoard)) {
+                            bestMove = move;
+                            break;
+                        }
+                    }
+                }
+
+                // 3. If neither, pick a random valid move
+                if (!bestMove) {
+                    bestMove = validMoves[Math.floor(Math.random() * validMoves.length)];
+                }
             } else {
                 const scoringFunction = setting.strategic ? scorePositionStrategic : scorePositionTactical;
                 bestMove = minimax(board, movesMade, setting.depth, -Infinity, Infinity, true, scoringFunction).move;
             }
-            
+
             boardElement.classList.remove('ai-thinking');
             if (bestMove) makeMove(bestMove.r, bestMove.c);
             else if (validMoves.length > 0) makeMove(validMoves[0].r, validMoves[0].c);
@@ -250,8 +296,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return { score: minEval, move: bestMove };
         }
     };
-
-    // --- Win Checking and UI Updates ---
+        // --- Win Checking and UI Updates ---
     const checkWin = (player, currentBoard) => {
         for (let r=0;r<8;r++) { for (let c=0;c<8;c++) {
             if (c + 3 < 8 && [0,1,2,3].every(i=>currentBoard[r][c+i]===player)) return Array(4).fill(null).map((_,i)=>({r,c:c+i}));
@@ -261,7 +306,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }}
         return null;
     };
-    
+
     const drawWinningLine = (line) => {
         const firstCellElement = boardElement.querySelector(`[data-row='${line[0].r}'][data-col='${line[0].c}']`);
         const lastCellElement = boardElement.querySelector(`[data-row='${line[3].r}'][data-col='${line[3].c}']`);
@@ -297,12 +342,33 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
     };
-    
+
+    const showInstallPrompt = () => {
+        if (deferredInstallPrompt && !window.matchMedia('(display-mode: standalone)').matches) {
+            installPromptContainer.classList.remove('hidden');
+            setTimeout(() => {
+                installPromptContainer.classList.add('visible');
+            }, 10);
+        }
+    };
+
     // --- Event Listeners ---
     resetButton.addEventListener('click', initializeGame);
     gameModeSelect.addEventListener('change', initializeGame);
     difficultyLevelSelect.addEventListener('change', initializeGame);
-    
+
+    installButton.addEventListener('click', async () => {
+        if (!deferredInstallPrompt) return;
+        deferredInstallPrompt.prompt();
+        await deferredInstallPrompt.userChoice;
+        deferredInstallPrompt = null;
+        installPromptContainer.classList.remove('visible');
+    });
+
+    installLaterButton.addEventListener('click', () => {
+        installPromptContainer.classList.remove('visible');
+    });
+
     // --- Start Game ---
     initializeGame();
 });
