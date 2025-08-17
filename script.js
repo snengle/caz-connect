@@ -9,7 +9,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const winningLineElement = document.getElementById('winning-line');
     const playerXScoreEl = document.getElementById('player-x-score');
     const playerOScoreEl = document.getElementById('player-o-score');
-    // PWA PROMPT: Get elements for the install prompt
     const installPromptContainer = document.getElementById('install-prompt-container');
     const installButton = document.getElementById('install-button');
     const installLaterButton = document.getElementById('install-later-button');
@@ -21,6 +20,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const AI_PLAYER = PLAYER_O;
     const HUMAN_PLAYER = PLAYER_X;
     
+    // AI Positional Strategy Map
     const POSITIONAL_VALUE_MAP = [
         [3, 4, 5, 7, 7, 5, 4, 3], [4, 6, 8, 10, 10, 8, 6, 4], [5, 8, 11, 13, 13, 11, 8, 5],
         [7, 10, 13, 16, 16, 13, 10, 7], [7, 10, 13, 16, 16, 13, 10, 7], [5, 8, 11, 13, 13, 11, 8, 5],
@@ -33,9 +33,9 @@ document.addEventListener('DOMContentLoaded', () => {
     let lastMove = { r: null, c: null };
     let playerXScore = 0;
     let playerOScore = 0;
-    let deferredInstallPrompt = null; // PWA PROMPT: Variable to hold the install event
+    let deferredInstallPrompt = null;
 
-    // --- PWA PROMPT: Listen for the browser's install event ---
+    // --- PWA Install Prompt ---
     window.addEventListener('beforeinstallprompt', (e) => {
         e.preventDefault();
         deferredInstallPrompt = e;
@@ -164,7 +164,6 @@ document.addEventListener('DOMContentLoaded', () => {
             drawWinningLine(winInfo);
         }
 
-        // PWA PROMPT: Trigger the prompt check when the game ends.
         if (gameOver) {
             setTimeout(showInstallPrompt, 1500);
         }
@@ -178,8 +177,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- AI Brain & Difficulty Dispatcher ---
     const computerMove = () => {
+        boardElement.classList.add('ai-thinking');
         setTimeout(() => {
-            let bestMove;
+            let bestMove = null;
             const validMoves = getValidMoves(board, movesMade);
             if(validMoves.length === 0) {
                 boardElement.classList.remove('ai-thinking');
@@ -187,16 +187,40 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             const difficultySettings = {
-                easy:   { depth: 1, strategic: true },
-                medium: { depth: 2, strategic: true },
+                medium: { depth: 2, strategic: false },
                 hard:   { depth: 3, strategic: true },
                 expert: { depth: movesMade > 20 ? 4 : 3, strategic: true }
             };
-            const setting = difficultySettings[difficulty];
 
             if (difficulty === 'easy') {
-                bestMove = validMoves[Math.floor(Math.random() * validMoves.length)];
+                // 1. Check if AI can win in one move
+                for (const move of validMoves) {
+                    const tempBoard = board.map(r => [...r]);
+                    tempBoard[move.r][move.c] = AI_PLAYER;
+                    if (checkWin(AI_PLAYER, tempBoard)) {
+                        bestMove = move;
+                        break;
+                    }
+                }
+                
+                // 2. If no win, check if player must be blocked
+                if (!bestMove) {
+                    for (const move of validMoves) {
+                        const tempBoard = board.map(r => [...r]);
+                        tempBoard[move.r][move.c] = HUMAN_PLAYER;
+                        if (checkWin(HUMAN_PLAYER, tempBoard)) {
+                            bestMove = move;
+                            break;
+                        }
+                    }
+                }
+                
+                // 3. If neither, pick a random valid move
+                if (!bestMove) {
+                    bestMove = validMoves[Math.floor(Math.random() * validMoves.length)];
+                }
             } else {
+                const setting = difficultySettings[difficulty];
                 const scoringFunction = setting.strategic ? scorePositionStrategic : scorePositionTactical;
                 bestMove = minimax(board, movesMade, setting.depth, -Infinity, Infinity, true, scoringFunction).move;
             }
@@ -313,7 +337,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    // --- PWA PROMPT: Function to show the custom install UI ---
     const showInstallPrompt = () => {
         if (deferredInstallPrompt && !window.matchMedia('(display-mode: standalone)').matches) {
             installPromptContainer.classList.remove('hidden');
@@ -328,7 +351,6 @@ document.addEventListener('DOMContentLoaded', () => {
     gameModeSelect.addEventListener('change', initializeGame);
     difficultyLevelSelect.addEventListener('change', initializeGame);
     
-    // PWA PROMPT: Event listeners for the install buttons
     installButton.addEventListener('click', async () => {
         if (!deferredInstallPrompt) return;
         deferredInstallPrompt.prompt();
@@ -339,7 +361,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     installLaterButton.addEventListener('click', () => {
         installPromptContainer.classList.remove('visible');
-        installPromptContainer.classList.add('hidden');
     });
     
     // --- Start Game ---
