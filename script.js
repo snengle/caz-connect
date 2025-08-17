@@ -9,14 +9,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const winningLineElement = document.getElementById('winning-line');
     const playerXScoreEl = document.getElementById('player-x-score');
     const playerOScoreEl = document.getElementById('player-o-score');
-
+    
     // --- Constants ---
     const BOARD_SIZE = 8;
     const PLAYER_X = 'X';
     const PLAYER_O = 'O';
     const AI_PLAYER = PLAYER_O;
     const HUMAN_PLAYER = PLAYER_X;
-
+    
     const POSITIONAL_VALUE_MAP = [
         [3, 4, 5, 7, 7, 5, 4, 3], [4, 6, 8, 10, 10, 8, 6, 4], [5, 8, 11, 13, 13, 11, 8, 5],
         [7, 10, 13, 16, 16, 13, 10, 7], [7, 10, 13, 16, 16, 13, 10, 7], [5, 8, 11, 13, 13, 11, 8, 5],
@@ -25,7 +25,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Game State ---
     let board, currentPlayer, movesMade, gameOver, gameMode, difficulty;
-    let firstPlayer = PLAYER_O;
+    let firstPlayer = PLAYER_O; 
     let lastMove = { r: null, c: null };
     let playerXScore = 0;
     let playerOScore = 0;
@@ -40,11 +40,11 @@ document.addEventListener('DOMContentLoaded', () => {
         lastMove = { r: null, c: null };
         gameMode = gameModeSelect.value;
         difficulty = difficultyLevelSelect.value;
-
+        
         difficultySelector.classList.toggle('hidden', gameMode !== 'pvc');
         winningLineElement.style.display = 'none';
         boardElement.classList.remove('ai-thinking');
-
+        
         updateScoreDisplay();
         updateStatus();
         renderBoard();
@@ -81,7 +81,7 @@ document.addEventListener('DOMContentLoaded', () => {
             boardElement.appendChild(cell);
         }}
     };
-
+    
     // --- CORE GAME LOGIC (Single Source of Truth) ---
     const isOnWall = (r, c) => r === 0 || r === BOARD_SIZE - 1 || c === 0 || c === BOARD_SIZE - 1;
 
@@ -112,7 +112,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         return false;
     };
-
+    
     const getValidMoves = (currentBoard, currentMovesMade) => {
         const moves = [];
         if (gameOver) return moves;
@@ -126,7 +126,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const r=parseInt(event.target.dataset.row), c=parseInt(event.target.dataset.col);
         if (isValidMove(r, c, board, movesMade)) makeMove(r, c);
     };
-
+    
     const makeMove = (r, c) => {
         if (gameOver) return;
         board[r][c] = currentPlayer;
@@ -143,12 +143,12 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
             currentPlayer = (currentPlayer === PLAYER_X) ? PLAYER_O : PLAYER_X;
         }
-
+        
         updateStatus();
-        renderBoard(); // Render first to show the move
-
+        renderBoard(); 
+        
         if (winInfo) {
-            drawWinningLine(winInfo); // Draw line after rendering
+            drawWinningLine(winInfo);
         }
 
         if (!gameOver && gameMode === 'pvc' && currentPlayer === AI_PLAYER) {
@@ -169,9 +169,9 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             const difficultySettings = {
-                easy:   { depth: 1, strategic: false },
+                easy: { depth: 0 },
                 medium: { depth: 2, strategic: false },
-                hard:   { depth: 3, strategic: true },
+                hard: { depth: 3, strategic: true },
                 expert: { depth: movesMade > 20 ? 4 : 3, strategic: true }
             };
             const setting = difficultySettings[difficulty];
@@ -182,7 +182,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 const scoringFunction = setting.strategic ? scorePositionStrategic : scorePositionTactical;
                 bestMove = minimax(board, movesMade, setting.depth, -Infinity, Infinity, true, scoringFunction).move;
             }
-
+            
+            // *** THE FIX IS HERE ***
+            boardElement.classList.remove('ai-thinking');
+            
             if (bestMove) makeMove(bestMove.r, bestMove.c);
             else if (validMoves.length > 0) makeMove(validMoves[0].r, validMoves[0].c);
         }, 50);
@@ -257,7 +260,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }}
         return null;
     };
-
+    
     const drawWinningLine = (line) => {
         const firstCellElement = boardElement.querySelector(`[data-row='${line[0].r}'][data-col='${line[0].c}']`);
         const lastCellElement = boardElement.querySelector(`[data-row='${line[3].r}'][data-col='${line[3].c}']`);
@@ -293,12 +296,12 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
     };
-
+    
     // --- Event Listeners ---
     resetButton.addEventListener('click', initializeGame);
     gameModeSelect.addEventListener('change', initializeGame);
     difficultyLevelSelect.addEventListener('change', initializeGame);
-
+    
     // --- Start Game ---
     initializeGame();
 });
