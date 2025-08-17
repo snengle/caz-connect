@@ -9,14 +9,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const winningLineElement = document.getElementById('winning-line');
     const playerXScoreEl = document.getElementById('player-x-score');
     const playerOScoreEl = document.getElementById('player-o-score');
-    
+
     // --- Constants ---
     const BOARD_SIZE = 8;
     const PLAYER_X = 'X';
     const PLAYER_O = 'O';
     const AI_PLAYER = PLAYER_O;
     const HUMAN_PLAYER = PLAYER_X;
-    
+
     const POSITIONAL_VALUE_MAP = [
         [3, 4, 5, 7, 7, 5, 4, 3], [4, 6, 8, 10, 10, 8, 6, 4], [5, 8, 11, 13, 13, 11, 8, 5],
         [7, 10, 13, 16, 16, 13, 10, 7], [7, 10, 13, 16, 16, 13, 10, 7], [5, 8, 11, 13, 13, 11, 8, 5],
@@ -25,7 +25,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Game State ---
     let board, currentPlayer, movesMade, gameOver, gameMode, difficulty;
-    let firstPlayer = PLAYER_O; 
+    let firstPlayer = PLAYER_O;
     let lastMove = { r: null, c: null };
     let playerXScore = 0;
     let playerOScore = 0;
@@ -40,11 +40,11 @@ document.addEventListener('DOMContentLoaded', () => {
         lastMove = { r: null, c: null };
         gameMode = gameModeSelect.value;
         difficulty = difficultyLevelSelect.value;
-        
+
         difficultySelector.classList.toggle('hidden', gameMode !== 'pvc');
         winningLineElement.style.display = 'none';
         boardElement.classList.remove('ai-thinking');
-        
+
         updateScoreDisplay();
         updateStatus();
         renderBoard();
@@ -81,8 +81,7 @@ document.addEventListener('DOMContentLoaded', () => {
             boardElement.appendChild(cell);
         }}
     };
-    
-    // --- CORE GAME LOGIC (Single Source of Truth) ---
+        // --- CORE GAME LOGIC (Single Source of Truth) ---
     const isOnWall = (r, c) => r === 0 || r === BOARD_SIZE - 1 || c === 0 || c === BOARD_SIZE - 1;
 
     const isValidMove = (r, c, currentBoard, currentMovesMade) => {
@@ -90,29 +89,37 @@ document.addEventListener('DOMContentLoaded', () => {
         if (currentMovesMade === 0) return isOnWall(r, c);
         if (isOnWall(r, c)) return true;
 
+        // Check UP for a valid supporting piece
         if (r > 0 && currentBoard[r - 1][c]) {
             let pathIsGood = true;
             for (let i = r - 1; i >= 0; i--) { if (!currentBoard[i][c]) { pathIsGood = false; break; } }
             if (pathIsGood) return true;
         }
+
+        // Check DOWN
         if (r < BOARD_SIZE - 1 && currentBoard[r + 1][c]) {
             let pathIsGood = true;
             for (let i = r + 1; i < BOARD_SIZE; i++) { if (!currentBoard[i][c]) { pathIsGood = false; break; } }
             if (pathIsGood) return true;
         }
+
+        // Check LEFT
         if (c > 0 && currentBoard[r][c - 1]) {
             let pathIsGood = true;
             for (let i = c - 1; i >= 0; i--) { if (!currentBoard[r][i]) { pathIsGood = false; break; } }
             if (pathIsGood) return true;
         }
+
+        // Check RIGHT
         if (c < BOARD_SIZE - 1 && currentBoard[r][c + 1]) {
             let pathIsGood = true;
             for (let i = c + 1; i < BOARD_SIZE; i++) { if (!currentBoard[r][i]) { pathIsGood = false; break; } }
             if (pathIsGood) return true;
         }
+
         return false;
     };
-    
+
     const getValidMoves = (currentBoard, currentMovesMade) => {
         const moves = [];
         if (gameOver) return moves;
@@ -126,7 +133,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const r=parseInt(event.target.dataset.row), c=parseInt(event.target.dataset.col);
         if (isValidMove(r, c, board, movesMade)) makeMove(r, c);
     };
-    
+
     const makeMove = (r, c) => {
         if (gameOver) return;
         board[r][c] = currentPlayer;
@@ -143,10 +150,10 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
             currentPlayer = (currentPlayer === PLAYER_X) ? PLAYER_O : PLAYER_X;
         }
-        
+
         updateStatus();
-        renderBoard(); 
-        
+        renderBoard();
+
         if (winInfo) {
             drawWinningLine(winInfo);
         }
@@ -157,9 +164,9 @@ document.addEventListener('DOMContentLoaded', () => {
             setTimeout(computerMove, 50);
         }
     };
-
-    // --- AI Brain & Difficulty Dispatcher ---
+        // --- AI Brain & Difficulty Dispatcher ---
     const computerMove = () => {
+        boardElement.classList.add('ai-thinking');
         setTimeout(() => {
             let bestMove;
             const validMoves = getValidMoves(board, movesMade);
@@ -169,23 +176,21 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             const difficultySettings = {
-                easy: { depth: 0 },
+                easy:   { depth: 1, strategic: false },
                 medium: { depth: 2, strategic: false },
-                hard: { depth: 3, strategic: true },
-                expert: { depth: movesMade > 20 ? 4 : 3, strategic: true }
+                hard:   { depth: 3, strategic: true },
+                expert: { depth: movesMade > 20 ? 4 : 3, strategic: true } // Adaptive Depth
             };
             const setting = difficultySettings[difficulty];
+            const scoringFunction = setting.strategic ? scorePositionStrategic : scorePositionTactical;
 
             if (difficulty === 'easy') {
                 bestMove = validMoves[Math.floor(Math.random() * validMoves.length)];
             } else {
-                const scoringFunction = setting.strategic ? scorePositionStrategic : scorePositionTactical;
                 bestMove = minimax(board, movesMade, setting.depth, -Infinity, Infinity, true, scoringFunction).move;
             }
-            
-            // *** THE FIX IS HERE ***
+
             boardElement.classList.remove('ai-thinking');
-            
             if (bestMove) makeMove(bestMove.r, bestMove.c);
             else if (validMoves.length > 0) makeMove(validMoves[0].r, validMoves[0].c);
         }, 50);
@@ -209,6 +214,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     const scorePositionStrategic = (currentBoard, player) => {
         let score = scorePositionTactical(currentBoard, player);
+        const opponent = player === AI_PLAYER ? HUMAN_PLAYER : AI_PLAYER;
         for(let r=0;r<8;r++) for(let c=0;c<8;c++) {
             if(currentBoard[r][c]===player) score += POSITIONAL_VALUE_MAP[r][c];
             else if(currentBoard[r][c]!==null) score -= POSITIONAL_VALUE_MAP[r][c];
@@ -249,18 +255,19 @@ document.addEventListener('DOMContentLoaded', () => {
             return { score: minEval, move: bestMove };
         }
     };
-
-    // --- Win Checking and UI Updates ---
+        // --- Win Checking and UI Updates ---
     const checkWin = (player, currentBoard) => {
-        for (let r=0;r<8;r++) { for (let c=0;c<8;c++) {
-            if (c + 3 < 8 && [0,1,2,3].every(i=>currentBoard[r][c+i]===player)) return Array(4).fill(null).map((_,i)=>({r,c:c+i}));
-            if (r + 3 < 8 && [0,1,2,3].every(i=>currentBoard[r+i][c]===player)) return Array(4).fill(null).map((_,i)=>({r:r+i,c}));
-            if (r + 3 < 8&&c + 3 < 8 && [0,1,2,3].every(i=>currentBoard[r+i][c+i]===player)) return Array(4).fill(null).map((_,i)=>({r:r+i,c:c+i}));
-            if (r - 3 >= 0&&c + 3 < 8 && [0,1,2,3].every(i=>currentBoard[r-i][c+i]===player)) return Array(4).fill(null).map((_,i)=>({r:r-i,c:c+i}));
-        }}
+        for (let r = 0; r < 8; r++) {
+            for (let c = 0; c < 8; c++) {
+                if (c + 3 < 8 && [0, 1, 2, 3].every(i => currentBoard[r][c + i] === player)) return Array(4).fill(null).map((_, i) => ({ r: r, c: c + i }));
+                if (r + 3 < 8 && [0, 1, 2, 3].every(i => currentBoard[r + i][c] === player)) return Array(4).fill(null).map((_, i) => ({ r: r + i, c: c }));
+                if (r + 3 < 8 && c + 3 < 8 && [0, 1, 2, 3].every(i => currentBoard[r + i][c + i] === player)) return Array(4).fill(null).map((_, i) => ({ r: r + i, c: c + i }));
+                if (r - 3 >= 0 && c + 3 < 8 && [0, 1, 2, 3].every(i => currentBoard[r - i][c + i] === player)) return Array(4).fill(null).map((_, i) => ({ r: r - i, c: c + i }));
+            }
+        }
         return null;
     };
-    
+
     const drawWinningLine = (line) => {
         const firstCellElement = boardElement.querySelector(`[data-row='${line[0].r}'][data-col='${line[0].c}']`);
         const lastCellElement = boardElement.querySelector(`[data-row='${line[3].r}'][data-col='${line[3].c}']`);
@@ -296,12 +303,12 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
     };
-    
+
     // --- Event Listeners ---
     resetButton.addEventListener('click', initializeGame);
     gameModeSelect.addEventListener('change', initializeGame);
     difficultyLevelSelect.addEventListener('change', initializeGame);
-    
+
     // --- Start Game ---
     initializeGame();
 });
