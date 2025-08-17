@@ -204,3 +204,75 @@ select, button {
     #score-board { font-size: 1.1rem; }
     #rules { width: 100%; }
 }
+/* --- PWA Install Prompt Styles --- */
+#install-prompt-container {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: 15px;
+    background-color: var(--board-bg);
+    box-shadow: 0 -5px 15px rgba(0, 0, 0, 0.3);
+    z-index: 1000;
+    transform: translateY(100%);
+    transition: transform 0.3s ease-in-out;
+}
+
+#install-prompt-container.visible {
+    transform: translateY(0);
+}
+
+#install-prompt-container.hidden {
+    display: block; /* Keep it in the DOM for transitions */
+}
+
+.install-prompt-content {
+    max-width: 600px;
+    margin: 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 15px;
+}
+
+.install-prompt-content h3 {
+    margin: 0;
+    color: var(--sub-text-color);
+    font-size: 1.2rem;
+}
+
+.install-prompt-content p {
+    margin: 0;
+    flex-grow: 1;
+    font-size: 0.9rem;
+}
+
+.install-prompt-buttons {
+    display: flex;
+    gap: 10px;
+}
+
+.install-prompt-buttons button {
+    padding: 8px 16px;
+    font-weight: 600;
+}
+
+.install-accept {
+    background-color: var(--player-o-color);
+    color: var(--bg-color);
+}
+
+.install-decline {
+    background-color: var(--cell-bg);
+}
+
+@media (max-width: 600px) {
+    .install-prompt-content {
+        flex-direction: column;
+        text-align: center;
+    }
+    .install-prompt-buttons {
+        width: 100%;
+        justify-content: center;
+    }
+}
