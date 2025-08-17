@@ -1,5 +1,6 @@
-const CACHE_NAME = 'caz-connect-v4';
-// This list now includes the correct script and all three local image files.
+const CACHE_NAME = 'caz-connect-v5';
+
+// Add the sound files to the list of assets to cache
 const URLS_TO_CACHE = [
   '/',
   'index.html',
@@ -7,7 +8,9 @@ const URLS_TO_CACHE = [
   'script.js',
   'professor-caz.png',
   'caz-icon-192.png',
-  'caz-icon-512.png'
+  'caz-icon-512.png',
+  'place.mp3',
+  'win.mp3'
 ];
 
 // Install the service worker and cache all the app's assets
