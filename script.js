@@ -40,6 +40,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let playerOScore = 0;
     let deferredInstallPrompt = null;
     let isMuted = localStorage.getItem('cazConnectMuted') === 'true';
+    let winningCells = null; // Store winning cells for responsive line drawing
 
     // --- PWA Install Prompt ---
     window.addEventListener('beforeinstallprompt', (e) => {
@@ -54,15 +55,16 @@ document.addEventListener('DOMContentLoaded', () => {
         currentPlayer = firstPlayer;
         movesMade = 0;
         gameOver = false;
+        winningCells = null;
         lastMove = { r: null, c: null };
         gameMode = gameModeSelect.value;
         difficulty = difficultyLevelSelect.value;
 
-        difficultySelector.classList.toggle('hidden', gameMode !== 'pvc');
         if (installPromptContainer) {
             installPromptContainer.classList.remove('visible');
             installPromptContainer.classList.add('hidden');
         }
+        difficultySelector.classList.toggle('hidden', gameMode !== 'pvc');
         winningLineElement.style.display = 'none';
         boardElement.classList.remove('ai-thinking');
 
@@ -162,6 +164,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const winInfo = checkWin(currentPlayer, board);
         if (winInfo) {
             gameOver = true;
+            winningCells = winInfo; // Store the winning cells
             if (currentPlayer === PLAYER_X) playerXScore++; else playerOScore++;
             updateScoreDisplay();
             if (!isMuted) winSound.play().catch(e => console.log("Sound play failed:", e));
@@ -191,13 +194,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- AI Brain & Difficulty Dispatcher ---
     const computerMove = () => {
-        boardElement.classList.add('ai-thinking');
         setTimeout(() => {
             let bestMove;
             const validMoves = getValidMoves(board, movesMade);
             if(validMoves.length === 0) {
-                boardElement.classList.remove('ai-thinking');
-                return;
+                boardElement.classList.remove('ai-thinking'); return;
             }
 
             const difficultySettings = {
@@ -219,9 +220,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         if (checkWin(HUMAN_PLAYER, tempBoard)) { bestMove = move; break; }
                     }
                 }
-                if (!bestMove) {
-                    bestMove = validMoves[Math.floor(Math.random() * validMoves.length)];
-                }
+                if (!bestMove) bestMove = validMoves[Math.floor(Math.random() * validMoves.length)];
             } else {
                 const scoringFunction = setting.strategic ? scorePositionStrategic : scorePositionTactical;
                 bestMove = minimax(board, movesMade, setting.depth, -Infinity, Infinity, true, scoringFunction).move;
@@ -251,10 +250,9 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     const scorePositionStrategic = (currentBoard, player) => {
         let score = scorePositionTactical(currentBoard, player);
-        const opponent = player === AI_PLAYER ? HUMAN_PLAYER : AI_PLAYER;
         for(let r=0;r<8;r++) for(let c=0;c<8;c++) {
             if(currentBoard[r][c]===player) score += POSITIONAL_VALUE_MAP[r][c];
-            else if(currentBoard[r][c]===opponent) score -= POSITIONAL_VALUE_MAP[r][c];
+            else if(currentBoard[r][c]!==null) score -= POSITIONAL_VALUE_MAP[r][c];
         }
         return score;
     };
@@ -358,6 +356,12 @@ document.addEventListener('DOMContentLoaded', () => {
     resetButton.addEventListener('click', initializeGame);
     gameModeSelect.addEventListener('change', initializeGame);
     difficultyLevelSelect.addEventListener('change', initializeGame);
+
+    window.addEventListener('resize', () => {
+        if (gameOver && winningCells) {
+            drawWinningLine(winningCells);
+        }
+    });
 
     muteButton.addEventListener('click', () => {
         isMuted = !isMuted;
