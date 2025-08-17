@@ -187,8 +187,8 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             const difficultySettings = {
-                easy:   { depth: 1, strategic: false },
-                medium: { depth: 2, strategic: false },
+                easy:   { depth: 1, strategic: true },
+                medium: { depth: 2, strategic: true },
                 hard:   { depth: 3, strategic: true },
                 expert: { depth: movesMade > 20 ? 4 : 3, strategic: true }
             };
