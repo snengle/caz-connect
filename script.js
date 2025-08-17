@@ -12,15 +12,20 @@ document.addEventListener('DOMContentLoaded', () => {
     const installPromptContainer = document.getElementById('install-prompt-container');
     const installButton = document.getElementById('install-button');
     const installLaterButton = document.getElementById('install-later-button');
-    
-    // --- Constants ---
+    const muteButton = document.getElementById('mute-button');
+    const volumeOnIcon = document.getElementById('volume-on-icon');
+    const volumeOffIcon = document.getElementById('volume-off-icon');
+
+    // --- Constants & Assets ---
     const BOARD_SIZE = 8;
     const PLAYER_X = 'X';
     const PLAYER_O = 'O';
     const AI_PLAYER = PLAYER_O;
     const HUMAN_PLAYER = PLAYER_X;
-    
-    // AI Positional Strategy Map
+
+    const placeSound = new Audio('place.mp3');
+    const winSound = new Audio('win.mp3');
+
     const POSITIONAL_VALUE_MAP = [
         [3, 4, 5, 7, 7, 5, 4, 3], [4, 6, 8, 10, 10, 8, 6, 4], [5, 8, 11, 13, 13, 11, 8, 5],
         [7, 10, 13, 16, 16, 13, 10, 7], [7, 10, 13, 16, 16, 13, 10, 7], [5, 8, 11, 13, 13, 11, 8, 5],
@@ -29,17 +34,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Game State ---
     let board, currentPlayer, movesMade, gameOver, gameMode, difficulty;
-    let firstPlayer = PLAYER_O; 
+    let firstPlayer = PLAYER_O;
     let lastMove = { r: null, c: null };
     let playerXScore = 0;
     let playerOScore = 0;
     let deferredInstallPrompt = null;
+    let isMuted = localStorage.getItem('cazConnectMuted') === 'true';
 
     // --- PWA Install Prompt ---
     window.addEventListener('beforeinstallprompt', (e) => {
         e.preventDefault();
         deferredInstallPrompt = e;
-        console.log('`beforeinstallprompt` event was fired and saved.');
     });
 
     // --- Game Initialization ---
@@ -52,12 +57,15 @@ document.addEventListener('DOMContentLoaded', () => {
         lastMove = { r: null, c: null };
         gameMode = gameModeSelect.value;
         difficulty = difficultyLevelSelect.value;
-        
-        if (installPromptContainer) installPromptContainer.classList.remove('visible');
+
         difficultySelector.classList.toggle('hidden', gameMode !== 'pvc');
+        if (installPromptContainer) {
+            installPromptContainer.classList.remove('visible');
+            installPromptContainer.classList.add('hidden');
+        }
         winningLineElement.style.display = 'none';
         boardElement.classList.remove('ai-thinking');
-        
+
         updateScoreDisplay();
         updateStatus();
         renderBoard();
@@ -94,7 +102,7 @@ document.addEventListener('DOMContentLoaded', () => {
             boardElement.appendChild(cell);
         }}
     };
-    
+
     // --- CORE GAME LOGIC (Single Source of Truth) ---
     const isOnWall = (r, c) => r === 0 || r === BOARD_SIZE - 1 || c === 0 || c === BOARD_SIZE - 1;
 
@@ -125,7 +133,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         return false;
     };
-    
+
     const getValidMoves = (currentBoard, currentMovesMade) => {
         const moves = [];
         if (gameOver) return moves;
@@ -139,27 +147,33 @@ document.addEventListener('DOMContentLoaded', () => {
         const r=parseInt(event.target.dataset.row), c=parseInt(event.target.dataset.col);
         if (isValidMove(r, c, board, movesMade)) makeMove(r, c);
     };
-    
+
     const makeMove = (r, c) => {
         if (gameOver) return;
         board[r][c] = currentPlayer;
         movesMade++;
         lastMove = { r, c };
 
+        if (!isMuted) {
+            placeSound.currentTime = 0;
+            placeSound.play().catch(e => console.log("Sound play failed:", e));
+        }
+
         const winInfo = checkWin(currentPlayer, board);
         if (winInfo) {
             gameOver = true;
             if (currentPlayer === PLAYER_X) playerXScore++; else playerOScore++;
             updateScoreDisplay();
+            if (!isMuted) winSound.play().catch(e => console.log("Sound play failed:", e));
         } else if (getValidMoves(board, movesMade).length === 0) {
             gameOver = true;
         } else {
             currentPlayer = (currentPlayer === PLAYER_X) ? PLAYER_O : PLAYER_X;
         }
-        
+
         updateStatus();
-        renderBoard(); 
-        
+        renderBoard();
+
         if (winInfo) {
             drawWinningLine(winInfo);
         }
@@ -179,7 +193,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const computerMove = () => {
         boardElement.classList.add('ai-thinking');
         setTimeout(() => {
-            let bestMove = null;
+            let bestMove;
             const validMoves = getValidMoves(board, movesMade);
             if(validMoves.length === 0) {
                 boardElement.classList.remove('ai-thinking');
@@ -187,44 +201,32 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             const difficultySettings = {
+                easy:   { depth: 1, strategic: false },
                 medium: { depth: 2, strategic: false },
                 hard:   { depth: 3, strategic: true },
                 expert: { depth: movesMade > 20 ? 4 : 3, strategic: true }
             };
+            const setting = difficultySettings[difficulty];
 
             if (difficulty === 'easy') {
-                // 1. Check if AI can win in one move
                 for (const move of validMoves) {
-                    const tempBoard = board.map(r => [...r]);
-                    tempBoard[move.r][move.c] = AI_PLAYER;
-                    if (checkWin(AI_PLAYER, tempBoard)) {
-                        bestMove = move;
-                        break;
-                    }
+                    const tempBoard = board.map(r => [...r]); tempBoard[move.r][move.c] = AI_PLAYER;
+                    if (checkWin(AI_PLAYER, tempBoard)) { bestMove = move; break; }
                 }
-                
-                // 2. If no win, check if player must be blocked
                 if (!bestMove) {
                     for (const move of validMoves) {
-                        const tempBoard = board.map(r => [...r]);
-                        tempBoard[move.r][move.c] = HUMAN_PLAYER;
-                        if (checkWin(HUMAN_PLAYER, tempBoard)) {
-                            bestMove = move;
-                            break;
-                        }
+                        const tempBoard = board.map(r => [...r]); tempBoard[move.r][move.c] = HUMAN_PLAYER;
+                        if (checkWin(HUMAN_PLAYER, tempBoard)) { bestMove = move; break; }
                     }
                 }
-                
-                // 3. If neither, pick a random valid move
                 if (!bestMove) {
                     bestMove = validMoves[Math.floor(Math.random() * validMoves.length)];
                 }
             } else {
-                const setting = difficultySettings[difficulty];
                 const scoringFunction = setting.strategic ? scorePositionStrategic : scorePositionTactical;
                 bestMove = minimax(board, movesMade, setting.depth, -Infinity, Infinity, true, scoringFunction).move;
             }
-            
+
             boardElement.classList.remove('ai-thinking');
             if (bestMove) makeMove(bestMove.r, bestMove.c);
             else if (validMoves.length > 0) makeMove(validMoves[0].r, validMoves[0].c);
@@ -249,9 +251,10 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     const scorePositionStrategic = (currentBoard, player) => {
         let score = scorePositionTactical(currentBoard, player);
+        const opponent = player === AI_PLAYER ? HUMAN_PLAYER : AI_PLAYER;
         for(let r=0;r<8;r++) for(let c=0;c<8;c++) {
             if(currentBoard[r][c]===player) score += POSITIONAL_VALUE_MAP[r][c];
-            else if(currentBoard[r][c]!==null) score -= POSITIONAL_VALUE_MAP[r][c];
+            else if(currentBoard[r][c]===opponent) score -= POSITIONAL_VALUE_MAP[r][c];
         }
         return score;
     };
@@ -277,7 +280,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (beta <= alpha) break;
             }
             return { score: maxEval, move: bestMove };
-        } else { // Minimizing player
+        } else {
             let minEval = Infinity;
             for (const move of validMoves) {
                 const newBoard = currentBoard.map(r=>[...r]); newBoard[move.r][move.c] = HUMAN_PLAYER;
@@ -300,7 +303,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }}
         return null;
     };
-    
+
     const drawWinningLine = (line) => {
         const firstCellElement = boardElement.querySelector(`[data-row='${line[0].r}'][data-col='${line[0].c}']`);
         const lastCellElement = boardElement.querySelector(`[data-row='${line[3].r}'][data-col='${line[3].c}']`);
@@ -338,31 +341,48 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const showInstallPrompt = () => {
-        if (deferredInstallPrompt && !window.matchMedia('(display-mode: standalone)').matches) {
+        if (installPromptContainer && deferredInstallPrompt && !window.matchMedia('(display-mode: standalone)').matches) {
             installPromptContainer.classList.remove('hidden');
-            setTimeout(() => {
-                installPromptContainer.classList.add('visible');
-            }, 10);
+            installPromptContainer.classList.add('visible');
         }
     };
-    
+
+    const updateMuteIcon = () => {
+        if(volumeOnIcon && volumeOffIcon){
+            volumeOnIcon.classList.toggle('hidden', isMuted);
+            volumeOffIcon.classList.toggle('hidden', !isMuted);
+        }
+    };
+
     // --- Event Listeners ---
     resetButton.addEventListener('click', initializeGame);
     gameModeSelect.addEventListener('change', initializeGame);
     difficultyLevelSelect.addEventListener('change', initializeGame);
-    
-    installButton.addEventListener('click', async () => {
-        if (!deferredInstallPrompt) return;
-        deferredInstallPrompt.prompt();
-        await deferredInstallPrompt.userChoice;
-        deferredInstallPrompt = null;
-        installPromptContainer.classList.remove('visible');
+
+    muteButton.addEventListener('click', () => {
+        isMuted = !isMuted;
+        localStorage.setItem('cazConnectMuted', isMuted);
+        updateMuteIcon();
     });
 
-    installLaterButton.addEventListener('click', () => {
-        installPromptContainer.classList.remove('visible');
-    });
-    
+    if (installButton) {
+        installButton.addEventListener('click', async () => {
+            if (!deferredInstallPrompt) return;
+            installPromptContainer.classList.remove('visible');
+            deferredInstallPrompt.prompt();
+            await deferredInstallPrompt.userChoice;
+            deferredInstallPrompt = null;
+        });
+    }
+
+    if (installLaterButton) {
+        installLaterButton.addEventListener('click', () => {
+            installPromptContainer.classList.remove('visible');
+            installPromptContainer.classList.add('hidden');
+        });
+    }
+
     // --- Start Game ---
+    updateMuteIcon();
     initializeGame();
 });
