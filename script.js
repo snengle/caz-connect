@@ -9,11 +9,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const winningLineElement = document.getElementById('winning-line');
     const playerXScoreEl = document.getElementById('player-x-score');
     const playerOScoreEl = document.getElementById('player-o-score');
-    // PWA PROMPT: Get elements for the install prompt
-    const installPromptContainer = document.getElementById('install-prompt-container');
-    const installButton = document.getElementById('install-button');
-    const installLaterButton = document.getElementById('install-later-button');
-
+    
     // --- Constants ---
     const BOARD_SIZE = 8;
     const PLAYER_X = 'X';
@@ -21,6 +17,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const AI_PLAYER = PLAYER_O;
     const HUMAN_PLAYER = PLAYER_X;
     
+    // AI Positional Strategy Map
     const POSITIONAL_VALUE_MAP = [
         [3, 4, 5, 7, 7, 5, 4, 3], [4, 6, 8, 10, 10, 8, 6, 4], [5, 8, 11, 13, 13, 11, 8, 5],
         [7, 10, 13, 16, 16, 13, 10, 7], [7, 10, 13, 16, 16, 13, 10, 7], [5, 8, 11, 13, 13, 11, 8, 5],
@@ -33,14 +30,6 @@ document.addEventListener('DOMContentLoaded', () => {
     let lastMove = { r: null, c: null };
     let playerXScore = 0;
     let playerOScore = 0;
-    let deferredInstallPrompt = null; // PWA PROMPT: Variable to hold the install event
-
-    // --- PWA PROMPT: Listen for the browser's install event ---
-    window.addEventListener('beforeinstallprompt', (e) => {
-        e.preventDefault();
-        deferredInstallPrompt = e;
-        console.log('`beforeinstallprompt` event was fired and saved.');
-    });
 
     // --- Game Initialization ---
     const initializeGame = () => {
@@ -53,9 +42,6 @@ document.addEventListener('DOMContentLoaded', () => {
         gameMode = gameModeSelect.value;
         difficulty = difficultyLevelSelect.value;
         
-        // PWA PROMPT: Hide the prompt on new game start
-        if (installPromptContainer) installPromptContainer.classList.remove('visible');
-
         difficultySelector.classList.toggle('hidden', gameMode !== 'pvc');
         winningLineElement.style.display = 'none';
         boardElement.classList.remove('ai-thinking');
@@ -160,15 +146,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         updateStatus();
-        renderBoard();
+        renderBoard(); 
         
         if (winInfo) {
             drawWinningLine(winInfo);
-        }
-
-        if (gameOver) {
-            // PWA PROMPT: Show the install prompt at the end of the game
-            setTimeout(showInstallPrompt, 1500); // Show after a small delay
         }
 
         if (!gameOver && gameMode === 'pvc' && currentPlayer === AI_PLAYER) {
@@ -178,25 +159,17 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    // --- PWA PROMPT: Function to show the custom install UI ---
-    const showInstallPrompt = () => {
-        if (deferredInstallPrompt && !window.matchMedia('(display-mode: standalone)').matches) {
-            installPromptContainer.classList.remove('hidden');
-            // A tiny delay ensures the class change triggers the CSS transition
-            setTimeout(() => {
-                installPromptContainer.classList.add('visible');
-            }, 10);
-        }
-    };
-
     // --- AI Brain & Difficulty Dispatcher ---
     const computerMove = () => {
+        boardElement.classList.add('ai-thinking');
         setTimeout(() => {
             let bestMove;
             const validMoves = getValidMoves(board, movesMade);
             if(validMoves.length === 0) {
-                boardElement.classList.remove('ai-thinking'); return;
+                boardElement.classList.remove('ai-thinking');
+                return;
             }
+
             const difficultySettings = {
                 easy:   { depth: 1, strategic: false },
                 medium: { depth: 2, strategic: false },
@@ -206,19 +179,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const setting = difficultySettings[difficulty];
 
             if (difficulty === 'easy') {
-                 let easyBestMove = null;
-                for (const move of validMoves) {
-                    const tempBoard = board.map(r => [...r]); tempBoard[move.r][move.c] = AI_PLAYER;
-                    if (checkWin(AI_PLAYER, tempBoard)) { easyBestMove = move; break; }
-                }
-                if (!easyBestMove) {
-                    for (const move of validMoves) {
-                        const tempBoard = board.map(r => [...r]); tempBoard[move.r][move.c] = HUMAN_PLAYER;
-                        if (checkWin(HUMAN_PLAYER, tempBoard)) { easyBestMove = move; break; }
-                    }
-                }
-                if (!easyBestMove) { easyBestMove = validMoves[Math.floor(Math.random() * validMoves.length)]; }
-                bestMove = easyBestMove;
+                bestMove = validMoves[Math.floor(Math.random() * validMoves.length)];
             } else {
                 const scoringFunction = setting.strategic ? scorePositionStrategic : scorePositionTactical;
                 bestMove = minimax(board, movesMade, setting.depth, -Infinity, Infinity, true, scoringFunction).move;
@@ -231,41 +192,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     // --- AI Scoring Functions ---
-    const scorePositionTactical = (currentBoard, player) => { /* ... (Unchanged) ... */ };
-    const scorePositionStrategic = (currentBoard, player) => { /* ... (Unchanged) ... */ };
-    const minimax = (currentBoard, currentMovesMade, depth, alpha, beta, maximizingPlayer, scoringFunction) => { /* ... (Unchanged) ... */ };
-
-    // --- Win Checking and UI Updates ---
-    const checkWin = (player, currentBoard) => { /* ... (Unchanged) ... */ };
-    const drawWinningLine = (line) => { /* ... (Unchanged) ... */ };
-    const updateScoreDisplay = () => { /* ... (Unchanged) ... */ };
-    const updateStatus = () => { /* ... (Unchanged) ... */ };
-    
-    // --- Event Listeners ---
-    resetButton.addEventListener('click', initializeGame);
-    gameModeSelect.addEventListener('change', initializeGame);
-    difficultyLevelSelect.addEventListener('change', initializeGame);
-    
-    // PWA PROMPT: Event listeners for the install buttons
-    installButton.addEventListener('click', async () => {
-        if (!deferredInstallPrompt) return;
-        deferredInstallPrompt.prompt();
-        const { outcome } = await deferredInstallPrompt.userChoice;
-        console.log(`User response to the install prompt: ${outcome}`);
-        deferredInstallPrompt = null;
-        installPromptContainer.classList.remove('visible');
-    });
-
-    installLaterButton.addEventListener('click', () => {
-        installPromptContainer.classList.remove('visible');
-    });
-    
-    // --- Start Game ---
-    initializeGame();
-
-    // --- (Full function definitions are included below this line for completeness) ---
-
-    function scorePositionTactical(currentBoard, player) {
+    const scorePositionTactical = (currentBoard, player) => {
         let score = 0;
         const opponent = player === AI_PLAYER ? HUMAN_PLAYER : AI_PLAYER;
         for (let r=0; r<8; r++) { for (let c=0; c<8; c++) {
@@ -279,8 +206,8 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }}
         return score;
-    }
-    function scorePositionStrategic(currentBoard, player) {
+    };
+    const scorePositionStrategic = (currentBoard, player) => {
         let score = scorePositionTactical(currentBoard, player);
         const opponent = player === AI_PLAYER ? HUMAN_PLAYER : AI_PLAYER;
         for(let r=0;r<8;r++) for(let c=0;c<8;c++) {
@@ -288,15 +215,18 @@ document.addEventListener('DOMContentLoaded', () => {
             else if(currentBoard[r][c]===opponent) score -= POSITIONAL_VALUE_MAP[r][c];
         }
         return score;
-    }
-    function minimax(currentBoard, currentMovesMade, depth, alpha, beta, maximizingPlayer, scoringFunction) {
+    };
+
+    const minimax = (currentBoard, currentMovesMade, depth, alpha, beta, maximizingPlayer, scoringFunction) => {
         const validMoves = getValidMoves(currentBoard, currentMovesMade);
         const isTerminal = checkWin(AI_PLAYER, currentBoard) || checkWin(HUMAN_PLAYER, currentBoard) || depth === 0 || validMoves.length === 0;
+
         if (isTerminal) {
             if (checkWin(AI_PLAYER, currentBoard)) return { score: 100000 + depth * 100 };
             if (checkWin(HUMAN_PLAYER, currentBoard)) return { score: -100000 - depth * 100 };
             return { score: scoringFunction(currentBoard, AI_PLAYER) };
         }
+
         let bestMove = validMoves[0];
         if (maximizingPlayer) {
             let maxEval = -Infinity;
@@ -308,7 +238,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (beta <= alpha) break;
             }
             return { score: maxEval, move: bestMove };
-        } else {
+        } else { // Minimizing player
             let minEval = Infinity;
             for (const move of validMoves) {
                 const newBoard = currentBoard.map(r=>[...r]); newBoard[move.r][move.c] = HUMAN_PLAYER;
@@ -319,8 +249,10 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             return { score: minEval, move: bestMove };
         }
-    }
-    function checkWin(player, currentBoard) {
+    };
+
+    // --- Win Checking and UI Updates ---
+    const checkWin = (player, currentBoard) => {
         for (let r=0;r<8;r++) { for (let c=0;c<8;c++) {
             if (c + 3 < 8 && [0,1,2,3].every(i=>currentBoard[r][c+i]===player)) return Array(4).fill(null).map((_,i)=>({r,c:c+i}));
             if (r + 3 < 8 && [0,1,2,3].every(i=>currentBoard[r+i][c]===player)) return Array(4).fill(null).map((_,i)=>({r:r+i,c}));
@@ -328,8 +260,9 @@ document.addEventListener('DOMContentLoaded', () => {
             if (r - 3 >= 0&&c + 3 < 8 && [0,1,2,3].every(i=>currentBoard[r-i][c+i]===player)) return Array(4).fill(null).map((_,i)=>({r:r-i,c:c+i}));
         }}
         return null;
-    }
-    function drawWinningLine(line) {
+    };
+    
+    const drawWinningLine = (line) => {
         const firstCellElement = boardElement.querySelector(`[data-row='${line[0].r}'][data-col='${line[0].c}']`);
         const lastCellElement = boardElement.querySelector(`[data-row='${line[3].r}'][data-col='${line[3].c}']`);
         if (!firstCellElement || !lastCellElement) return;
@@ -345,12 +278,14 @@ document.addEventListener('DOMContentLoaded', () => {
         const len = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
         const ang = Math.atan2(deltaY, deltaX) * (180 / Math.PI);
         winningLineElement.style.cssText = `width:${len}px; left:${startX}px; top:${startY}px; transform:rotate(${ang}deg); display:block;`;
-    }
-    function updateScoreDisplay() {
+    };
+
+    const updateScoreDisplay = () => {
         playerXScoreEl.textContent = playerXScore;
         playerOScoreEl.textContent = playerOScore;
-    }
-    function updateStatus() {
+    };
+
+    const updateStatus = () => {
         if (gameOver) {
             const winnerInfo = checkWin(PLAYER_X, board) || checkWin(PLAYER_O, board);
             statusText.textContent = winnerInfo ? `Player ${board[winnerInfo[0].r][winnerInfo[0].c]} Wins!` : "It's a Draw!";
@@ -361,5 +296,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 statusText.textContent = `Player ${currentPlayer}'s Turn`;
             }
         }
-    }
+    };
+    
+    // --- Event Listeners ---
+    resetButton.addEventListener('click', initializeGame);
+    gameModeSelect.addEventListener('change', initializeGame);
+    difficultyLevelSelect.addEventListener('change', initializeGame);
+    
+    // --- Start Game ---
+    initializeGame();
 });
