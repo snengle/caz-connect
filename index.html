@@ -1,99 +1,353 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Caz Connect</title>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Caz Connect: A React Strategy Game</title>
+    <link rel="manifest" href="./manifest.json" />
+    <link rel="icon" type="image/png" sizes="48x48" href="./icons/icon-48x48.png">
+    <link rel="icon" type="image/png" sizes="96x96" href="./icons/icon-96x96.png">
+    <link rel="apple-touch-icon" sizes="192x192" href="./icons/icon-192x192.png">
+    <meta name="theme-color" content="#3d4a58" />
+    <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css">
-    <link rel="icon" href="professor-caz.png" type="image/png">
-    <link rel="manifest" href="manifest.json">
-    <meta name="theme-color" content="#16213e">
+    <link href="https://fonts.googleapis.com/css2?family=Permanent+Marker&family=Roboto+Slab:wght@400;700&family=Poppins:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+      /* THEME STYLES */
+      body {
+        transition: background-color 0.5s ease, color 0.5s ease;
+      }
+
+      /* --- SCIENCE THEME --- */
+      .theme-science {
+        --font-heading: 'Permanent Marker', cursive;
+        --font-body: 'Roboto Slab', serif;
+        --bg-main: #3d4a58;
+        --bg-main-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADIAAAAyCAYAAAAeP4ixAAAAAXNSR0IArs4c6QAAARlJREFUaAXt1EFOwkAQBdAv3Z10Ceqg5gqOA0dwBDdwJz1Bp27d+wJEJJkMpplJjMwp4K1f2k2S/C+Xy0eyLAuAP4/H4wB2d3e3/v7+bgD+7Y8DAJ48Pz//3t/ff1tSUlKSUlKSUlKSUlKSUlKSUlKSUlKSUlKSUlKSUlKSUlKSUlKSUlKSUlKSUlKSUlKSUlKSUlKSUlKSUlKSUlKSUlKSUlKSUlKSUlKSUlKSUlKSUlKSUlKSUlKSUlKSUlKSUlKSUlKSUlKSUlKSUlKSUlKSUlKSUlKSUlKSUlKSUlKSUlKSUlKSUlKSUlKSUlKSUlKSUlKSUlKSUlKSUlKSUlKSUlKSUlKSUlKSUlKSUlKSXwHg73h4ePj5+fn5f3w+nwHAh4eH/wH4Y1iTSSr/1gAAAABJRU5ErkJggg==);
+        --text-main: #e2e8f0;
+        --text-panel: #3d4a58;
+        --text-header: #facc15; /* yellow-400 */
+        --text-subheader: #d1d5db; /* gray-300 */
+        --panel-bg: #fef9c3; /* A pleasant, soft yellow */
+        --panel-border: #d4c7a6;
+        --panel-shadow: 5px 5px 10px rgba(0,0,0,0.5);
+        --board-frame-bg: #78350f; /* yellow-800 */
+        --board-grid-bg: #e2e8f0; /* slate-200 */
+        --board-grid-line-color: rgba(100, 116, 139, 0.2);
+        --player-x-color: #facc15; /* yellow-400 */
+        --player-o-color: #7dd3fc; /* sky-300 */
+        --player-x-shadow: 0 0 3px #fde047, 0 0 5px #fde047;
+        --player-o-shadow: 0 0 3px #7dd3fc, 0 0 5px #7dd3fc;
+        --score-display-bg: #f7f3e9;
+        --score-display-text: #3d4a58;
+        --score-display-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        --prompt-bg: #ffff99; /* post-it note yellow */
+        --prompt-text: #1e293b; /* slate-800 */
+        --prompt-header: #0369a1; /* sky-700 */
+        --button-primary-bg: #ef4444;
+        --button-primary-text: white;
+        --button-secondary-border: #94a3b8; /* slate-400 */
+        --button-secondary-bg: transparent;
+        --button-secondary-text: #475569; /* slate-600 */
+        --button-secondary-hover-bg: #e2e8f0; /* slate-200 */
+        --button-header-bg: var(--panel-bg);
+        --button-header-border: var(--panel-border);
+        --button-header-text: var(--text-panel);
+        --button-header-hover-shadow: inset 2px 2px 4px rgba(0,0,0,0.15);
+        --toggle-bg: #cbd5e1; /* slate-300 */
+        --toggle-active-bg: #4ade80; /* green-400 */
+        --toggle-handle-bg: white;
+        --select-bg: rgba(255,255,255,0.5);
+        --select-border: #94a3b8;
+        --select-text: #334155;
+        --stats-bar-bg: #d4c7a6;
+        --stats-bar-fill: #ef4444;
+      }
+
+      /* --- SPACE/COSMIC THEME --- */
+      .theme-space {
+        --font-heading: 'Poppins', sans-serif;
+        --font-body: 'Poppins', sans-serif;
+        --bg-main: #090a0f;
+        --bg-main-image: none;
+        --text-main: #e0e0e0;
+        --text-panel: #e0e0e0;
+        --text-header: #ffffff;
+        --text-subheader: #a0a0a0;
+        --panel-bg: rgba(42, 42, 78, 0.8);
+        --panel-border: #4a4a6a;
+        --panel-shadow: 0px 0px 20px rgba(74, 144, 226, 0.3);
+        --board-frame-bg: #2a2a4e;
+        --board-grid-bg: #1a1a2e;
+        --board-grid-line-color: rgba(74, 144, 226, 0.3);
+        --player-x-color: #ffca28; /* Amber */
+        --player-o-color: #26c6da; /* Cyan */
+        --player-x-shadow: 0 0 8px #ffca28, 0 0 12px #ffca28;
+        --player-o-shadow: 0 0 8px #26c6da, 0 0 12px #26c6da;
+        --score-display-bg: rgba(0,0,0,0.3);
+        --score-display-text: #ffffff;
+        --score-display-shadow: none;
+        --prompt-bg: #2a2a4e;
+        --prompt-text: #e0e0e0;
+        --prompt-header: #82aaff;
+        --button-primary-bg: #4a90e2;
+        --button-primary-text: white;
+        --button-secondary-border: #4a90e2;
+        --button-secondary-bg: transparent;
+        --button-secondary-text: #82aaff;
+        --button-secondary-hover-bg: rgba(74, 144, 226, 0.2);
+        --button-header-bg: rgba(42, 42, 78, 0.7);
+        --button-header-border: #82aaff;
+        --button-header-text: #e0e0e0;
+        --button-header-hover-shadow: 0 0 10px #4a90e2;
+        --toggle-bg: #4a4a6a;
+        --toggle-active-bg: #4a90e2;
+        --toggle-handle-bg: #e0e0e0;
+        --select-bg: #1a1a2e;
+        --select-border: #4a90e2;
+        --select-text: #e0e0e0;
+        --stats-bar-bg: #4a4a6a;
+        --stats-bar-fill: #4a90e2;
+      }
+
+      /* GLOBAL STYLES */
+      body {
+        font-family: var(--font-body);
+        background-color: var(--bg-main);
+        background-image: var(--bg-main-image);
+        color: var(--text-main);
+      }
+      .piece-font { font-family: var(--font-heading), "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji"; }
+      .title-font { font-family: var(--font-heading); }
+
+      /* COMPONENT STYLES */
+      .component-panel {
+        background-color: var(--panel-bg);
+        color: var(--text-panel);
+        border: 2px solid var(--panel-border);
+        box-shadow: var(--panel-shadow);
+      }
+      .prompt-panel {
+        background-color: var(--prompt-bg);
+        color: var(--prompt-text);
+        box-shadow: 0 -5px 15px rgba(0,0,0,0.3);
+      }
+      .prompt-panel h3 { color: var(--prompt-header); }
+
+      /* Header */
+      .header-title { color: var(--text-header); text-shadow: 2px 2px 3px rgba(0,0,0,0.5); }
+      .header-subtitle { color: var(--text-subheader); }
+      .mascot-image {
+        transform: rotate(-2deg);
+        transition: transform 0.3s ease;
+      }
+      .theme-space .mascot-image { border: 2px solid #82aaff; box-shadow: 0 0 10px #82aaff; transform: rotate(0deg); }
+      .header-button {
+        background-color: var(--button-header-bg);
+        border: 2px solid var(--button-header-border);
+        color: var(--button-header-text);
+        transition: box-shadow 0.2s ease-in-out, background-color 0.2s ease-in-out;
+      }
+      .header-button:hover {
+        box-shadow: var(--button-header-hover-shadow);
+        background-color: var(--button-secondary-hover-bg);
+      }
+
+      /* Status */
+      .status-text { color: var(--text-main); text-shadow: 1px 1px 2px rgba(0,0,0,0.7); }
+      .score-display {
+        background-color: var(--score-display-bg);
+        color: var(--score-display-text);
+        box-shadow: var(--score-display-shadow);
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+      }
+      .theme-science .score-display-x { transform: rotate(-2deg); }
+      .theme-science .score-display-o { transform: rotate(1deg); }
+
+      .theme-science .score-display.active-player { animation: active-player-pulse 1.5s infinite ease-in-out; }
+      @keyframes active-player-pulse { 0%, 100% { transform: scale(1) rotate(var(--rotation, 0deg)); } 50% { transform: scale(1.05) rotate(var(--rotation, 0deg)); } }
+      .score-display-x { --rotation: -2deg; } .score-display-o { --rotation: 1deg; }
+
+      .theme-space .score-display.active-player { animation: active-player-glow 1.5s infinite ease-in-out; }
+      @keyframes active-player-glow { 0%, 100% { box-shadow: none; } 50% { box-shadow: 0 0 12px var(--player-x-color); } }
+      .score-display-o.active-player { animation-name: active-player-glow-o; }
+      @keyframes active-player-glow-o { 0%, 100% { box-shadow: none; } 50% { box-shadow: 0 0 12px var(--player-o-color); } }
+
+
+      /* Board & Cell */
+      .board-frame { background-color: var(--board-frame-bg); }
+      .board-grid {
+        background-color: var(--board-grid-bg);
+        background-image:
+          linear-gradient(var(--board-grid-line-color) 1px, transparent 1px),
+          linear-gradient(90deg, var(--board-grid-line-color) 1px, transparent 1px);
+        background-size: calc(100% / 8) calc(100% / 8);
+        border: 1px solid var(--board-grid-line-color);
+      }
+      .board-cell { position: relative; }
+
+      .player-x-piece { color: var(--player-x-color); text-shadow: var(--player-x-shadow); }
+      .player-o-piece { color: var(--player-o-color); text-shadow: var(--player-o-shadow); }
+
+      /* Controls */
+      .section-header { color: var(--text-panel); opacity: 0.7; }
+      .control-button {
+        padding: 0.5rem 0.75rem;
+        border-radius: 0.5rem;
+        font-weight: 600;
+        font-size: 1rem;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        border: 2px solid transparent;
+      }
+      .control-button:disabled { cursor: not-allowed; opacity: 0.5; }
+      .primary-button { background-color: var(--button-primary-bg); color: var(--button-primary-text); }
+      .primary-button:hover:not(:disabled) { opacity: 0.8; }
+      .secondary-button {
+        border-color: var(--button-secondary-border);
+        background-color: var(--button-secondary-bg);
+        color: var(--button-secondary-text);
+      }
+      .secondary-button:hover:not(:disabled) { background-color: var(--button-secondary-hover-bg); }
+
+      .game-mode-toggle { background-color: var(--button-secondary-hover-bg); padding: 0.25rem; border-radius: 0.5rem; display: flex; }
+      .toggle-option { flex: 1; padding: 0.375rem 0.5rem; border-radius: 0.375rem; font-size: 0.875rem; font-weight: 600; transition: all 0.2s; color: var(--button-secondary-text); border: none; background: transparent; }
+      .toggle-option:disabled { opacity: 0.5; }
+      .toggle-option.active { background-color: var(--toggle-active-bg); color: var(--button-primary-text); }
+
+      .control-row { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-top: 0.5rem; }
+      .control-label { font-size: 0.875rem; color: var(--text-panel); }
+      .control-select {
+        padding: 0.375rem 0.5rem;
+        font-size: 0.875rem;
+        border: 1px solid var(--select-border);
+        border-radius: 0.5rem;
+        background-color: var(--select-bg);
+        color: var(--select-text);
+        cursor: pointer;
+        width: 50%;
+      }
+      .control-input {
+        background-color: var(--select-bg);
+        border: 1px solid var(--select-border);
+        padding: 0.375rem;
+        border-radius: 0.5rem;
+      }
+      .lab-section { border-color: var(--panel-border) !important; }
+      .lab-arrow { color: var(--text-panel); opacity: 0.7; }
+
+      .toggle-switch { position: relative; display: inline-flex; align-items: center; height: 1.5rem; border-radius: 9999px; width: 2.75rem; transition: background-color 0.2s ease; cursor: pointer; background-color: var(--toggle-bg); }
+      .toggle-switch.active { background-color: var(--toggle-active-bg); }
+      .toggle-switch-handle { display: inline-block; width: 1rem; height: 1rem; transform: translateX(0.25rem); background-color: var(--toggle-handle-bg); border-radius: 9999px; transition: transform 0.2s ease; }
+      .toggle-switch.active .toggle-switch-handle { transform: translateX(1.5rem); }
+
+      /* Tab Controls */
+      .tab-nav {
+        display: flex;
+        border-bottom: 2px solid var(--panel-border);
+        margin-bottom: 0.25rem;
+      }
+      .tab-button {
+        flex: 1;
+        padding: 0.5rem 0.25rem;
+        border: none;
+        background: transparent;
+        color: var(--button-secondary-text);
+        font-weight: 600;
+        cursor: pointer;
+        position: relative;
+        opacity: 0.7;
+        transition: opacity 0.2s, color 0.2s;
+      }
+      .tab-button:hover:not(:disabled) {
+        opacity: 1;
+      }
+      .tab-button.active {
+        color: var(--text-panel);
+        opacity: 1;
+      }
+      .tab-button.active::after {
+        content: '';
+        position: absolute;
+        bottom: -2px;
+        left: 0;
+        right: 0;
+        height: 2px;
+        background-color: var(--button-primary-bg);
+        border-radius: 1px;
+      }
+      .tab-content {
+        min-height: 160px; /* Prevent layout shift when changing tabs */
+      }
+
+      /* Game Over Modal Stats & Mini Board */
+      .stats-bar-container {
+        height: 1.25rem;
+        background-color: var(--stats-bar-bg);
+        border-radius: 0.375rem;
+        overflow: hidden;
+        position: relative;
+        border: 1px solid rgba(0,0,0,0.1);
+      }
+      .stats-bar-fill {
+        height: 100%;
+        background-color: var(--stats-bar-fill);
+        border-radius: 0.25rem;
+        transition: width 0.5s ease-out;
+      }
+      .stats-bar-text {
+        position: absolute;
+        left: 0.5rem;
+        top: 50%;
+        transform: translateY(-50%);
+        font-size: 0.75rem;
+        font-weight: bold;
+        color: var(--button-primary-text);
+        text-shadow: 1px 1px 1px rgba(0,0,0,0.4);
+        pointer-events: none;
+      }
+      .mini-board {
+        display: grid;
+        grid-template-columns: repeat(8, 1fr);
+        width: 160px;
+        height: 160px;
+        margin: 0.75rem auto;
+        background-color: var(--board-grid-bg);
+        border: 2px solid var(--panel-border);
+        border-radius: 0.375rem;
+        box-shadow: inset 2px 2px 4px rgba(0,0,0,0.2);
+      }
+      .mini-cell {
+        width: 100%;
+        height: 100%;
+        border: 1px solid var(--board-grid-line-color);
+        box-sizing: border-box;
+      }
+      .mini-cell.player-x { background-color: var(--player-x-color); }
+      .mini-cell.player-o { background-color: var(--player-o-color); }
+      .mini-cell.winning {
+        animation: win-pulse-mini 1.2s infinite;
+        box-shadow: inset 0 0 4px white;
+      }
+       @keyframes win-pulse-mini {
+          0%, 100% { filter: brightness(1); }
+          50% { filter: brightness(1.3); }
+       }
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "react/": "https://aistudiocdn.com/react@^19.1.1/",
+    "react": "https://aistudiocdn.com/react@^19.1.1",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.1.1/",
+    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.17.0"
+  }
+}
+</script>
 </head>
-<body>
-    <div class="main-container">
-        <!-- Title is first for all screen sizes -->
-        <header class="title-container">
-            <div class="title-left">
-                <img id="mascot" src="professor-caz.png" alt="Professor Caz Mascot">
-                <div class="title-text-group">
-                    <h1>Caz Connect</h1>
-                    <h2>A Game of Gravity & Connection</h2>
-                </div>
-            </div>
-            <button id="mute-button" aria-label="Mute sound">
-                <svg id="volume-on-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M13.5 4.06c0-1.34-1.61-2.25-2.83-1.46L5.43 6H3a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h2.43l5.24 3.4c1.22.79 2.83-.12 2.83-1.46V4.06zM18.5 12c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM20 12c0 2.76-1.74 5.09-4.01 6.04v-12c2.27.95 4.01 3.27 4.01 5.96z"></path></svg>
-                <svg id="volume-off-icon" class="hidden" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3a1 1 0 0 0-1 1v4a1 1 0 0 0 1 1h3.73L12 18.27v-5.52l4.51 4.51c-.67.43-1.4.76-2.18.98v2.06a8.99 8.99 0 0 0 3.65-1.49L19.73 21 21 19.73l-9-9L4.27 3zM12 4.06L7.22 7.54 12 12.31V4.06z"></path></svg>
-            </button>
-        </header>
-
-        <!-- Game Area (board and status) -->
-        <main class="game-area">
-            <div class="board-container">
-                <div id="game-board"></div>
-                <div id="winning-line"></div>
-            </div>
-            <div id="status-area">
-                <p id="status-text">Player X's Turn</p>
-                <div id="score-board">
-                    <span class="score-item">Player X: <span id="player-x-score">0</span></span>
-                    <span class="score-item">Player O: <span id="player-o-score">0</span></span>
-                </div>
-            </div>
-        </main>
-
-        <!-- Info Area (controls and rules) -->
-        <aside class="info-area">
-            <div id="game-controls">
-                <div class="control-group">
-                    <label for="game-mode">Mode:</label>
-                    <select id="game-mode">
-                        <option value="pvc">Player vs. Computer</option>
-                        <option value="pvp">Player vs. Player</option>
-                    </select>
-                </div>
-                <div class="control-group hidden" id="difficulty-selector">
-                    <label for="difficulty-level">Difficulty:</label>
-                    <select id="difficulty-level">
-                        <option value="easy">Easy</option>
-                        <option value="medium" selected>Medium</option>
-                        <option value="hard">Hard</option>
-                        <option value="expert">Expert</option>
-                    </select>
-                </div>
-                <button id="reset-button">New Game</button>
-            </div>
-            <div id="rules">
-                <h3>Instructions</h3>
-                <p align="left"><strong>Objective: </strong> Get 4 X's in a row to win!</p>
-                <p align="left"><strong>Valid Move: </strong> Pieces must either be directly next to any of the walls or be connected in a straight line to other piece(s) to a wall. Easy difficulty shows you all valid moves.</p>
-            </div>
-        </aside>
-    </div>
-
-    <div id="install-prompt-container" class="hidden">
-        <div class="install-prompt-content">
-            <div class="install-prompt-text">
-                <h3>Install Caz Connect</h3>
-                <p>Add to your Home Screen for a full-screen, offline experience!</p>
-            </div>
-            <div class="install-prompt-buttons">
-                <button id="install-button" class="install-accept">Install</button>
-                <button id="install-later-button" class="install-decline">Later</button>
-            </div>
-        </div>
-    </div>
-
-    <script src="script.js"></script>
-    <script>
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('./sw.js').then(reg => console.log('Service Worker registered.'))
-                .catch(err => console.log('Service Worker registration failed: ', err));
-            });
-        }
-    </script>
-</body>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="./index.js"></script>
+  </body>
 </html>

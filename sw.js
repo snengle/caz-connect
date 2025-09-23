@@ -1,28 +1,41 @@
-const CACHE_NAME = 'caz-connect-v5';
-
-// Add the sound files to the list of assets to cache
+const CACHE_NAME = 'caz-connect-cache-v1';
 const URLS_TO_CACHE = [
-  '/',
-  'index.html',
-  'style.css',
-  'script.js',
-  'professor-caz.png',
-  'caz-icon-192.png',
-  'caz-icon-512.png',
-  'place.mp3',
-  'win.mp3'
+  './',
+  './index.html',
+  './manifest.json',
+  './professor-caz.png',
+  './place.mp3',
+  './win.mp3',
+  './badmove.mp3',
+  './default-brain.json',
+  // App Icons
+  './icons/icon-48x48.png',
+  './icons/icon-72x72.png',
+  './icons/icon-96x96.png',
+  './icons/icon-120x120.png',
+  './icons/icon-144x144.png',
+  './icons/icon-152x152.png',
+  './icons/icon-192x192.png',
+  './icons/icon-310x150.png',
+  './icons/icon-512x512.png',
+  // External resources
+  'https://cdn.tailwindcss.com',
+  'https://fonts.googleapis.com/css2?family=Permanent+Marker&family=Roboto+Slab:wght@400;700&display=swap',
+  'https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap',
 ];
 
-// Install the service worker and cache all the app's assets
+// Install the service worker and cache the static assets
 self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then(cache => {
-        console.log('Opened cache and caching new files.');
+        console.log('Opened cache and caching static assets');
         return cache.addAll(URLS_TO_CACHE);
       })
+      .catch(error => {
+        console.error('Failed to cache static assets:', error);
+      })
   );
-  self.skipWaiting();
 });
 
 // Serve cached content when offline
@@ -30,18 +43,17 @@ self.addEventListener('fetch', event => {
   event.respondWith(
     caches.match(event.request)
       .then(response => {
-        // Cache hit - return response from cache
+        // Cache hit - return response
         if (response) {
           return response;
         }
         // Not in cache - fetch from network
         return fetch(event.request);
-      }
-    )
+      })
   );
 });
 
-// Clean up old caches when the new service worker is activated
+// Clean up old caches
 self.addEventListener('activate', event => {
   const cacheWhitelist = [CACHE_NAME];
   event.waitUntil(
@@ -49,7 +61,6 @@ self.addEventListener('activate', event => {
       return Promise.all(
         cacheNames.map(cacheName => {
           if (cacheWhitelist.indexOf(cacheName) === -1) {
-            console.log('Deleting old cache:', cacheName);
             return caches.delete(cacheName);
           }
         })
