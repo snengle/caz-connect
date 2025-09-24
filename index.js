@@ -298,9 +298,9 @@ var useGameLogic = () => {
   const [isLabUnlocked, setIsLabUnlocked] = useState(false);
   const [isAiLearningEnabled, setIsAiLearningEnabled] = useState(() => {
     try {
-      return localStorage.getItem("cazConnectAiLearningEnabled") === "true";
+      return localStorage.getItem("cazConnectAiLearningEnabled") !== "false";
     } catch {
-      return false;
+      return true;
     }
   });
   const [levelChange, setLevelChange] = useState(null);
@@ -809,7 +809,7 @@ var useGameLogic = () => {
       }
     }
     const canonicalMoveString = getCanonicalMoveHistoryString(history);
-    if (adaptiveLevel >= 4 && isAiLearningEnabled) {
+    if (adaptiveLevel === 5 && isAiLearningEnabled) {
       setGameMemory((prevMemory) => {
         const newMemory = { ...prevMemory };
         if (winner === AI_PLAYER) {
@@ -1411,11 +1411,11 @@ var useGameLogic = () => {
           // 1: Novice
           { depth: 2, strategic: false, useMemory: false },
           // 2: Intermediate
-          { depth: 2, strategic: true, useMemory: false },
+          { depth: 3, strategic: true, useMemory: false },
           // 3: Expert
           { depth: 3, strategic: true, useMemory: true },
           // 4: Master
-          { depth: 3, strategic: true, useMemory: true }
+          { depth: 4, strategic: true, useMemory: true }
           // 5: Grand Master
         ];
         const currentSetting = settings[adaptiveLevel];
@@ -1777,11 +1777,11 @@ import { useRef as useRef2, useState as useState3, useEffect as useEffect2, useC
 import { jsx as jsx3, jsxs as jsxs3 } from "react/jsx-runtime";
 var Cell = ({ value, playerPiece, playerOPiece, isLastMove, isValid, highlightValid, isWinningPiece, isTutorialHighlighted, isInvalidMoveAttempt, onClick, "data-row": dataRow, "data-col": dataCol }) => {
   const playerClasses = value === "X" ? "player-x-piece" : "player-o-piece";
-  const baseClasses = "relative aspect-square text-[5.5vmin] lg:text-[42px] flex items-center justify-center font-bold transition-all duration-200 piece-font leading-none text-center";
+  const baseClasses = "relative aspect-square text-[5.5vmin] lg:text-[42px] flex items-center justify-center font-bold transition-all duration-200 piece-font leading-none text-center select-none";
   const stateClasses = `
         ${value ? playerClasses : ""}
         ${isLastMove && !isWinningPiece ? "bg-slate-400/30 rounded-lg" : ""}
-        ${isValid ? "hover:bg-slate-400/40 cursor-pointer rounded-lg" : "cursor-not-allowed"}
+        ${isValid ? "cursor-pointer rounded-lg hover:bg-slate-500/20" : "cursor-not-allowed"}
         ${highlightValid ? "bg-slate-400/20 rounded-lg" : ""}
     `;
   const animationClasses = [
@@ -2220,6 +2220,7 @@ var Controls = ({
   const [isLabOpen, setIsLabOpen] = useState5(false);
   const fileInputRef = useRef4(null);
   const [activeTab, setActiveTab] = useState5("setup");
+  const appVersion = "1.1.0";
   const [tempPlayerName, setTempPlayerName] = useState5(playerName);
   const [tempPlayerPiece, setTempPlayerPiece] = useState5(playerPiece);
   const [tempPlayerOName, setTempPlayerOName] = useState5(playerOName);
@@ -2532,6 +2533,10 @@ var Controls = ({
             /* @__PURE__ */ jsx7("strong", { children: "Installable & Offline-Ready:" }),
             " As a Progressive Web App (PWA), you can install Caz Connect directly to your home screen for a full-screen, offline-ready experience anytime, anywhere."
           ] })
+        ] }),
+        /* @__PURE__ */ jsxs6("p", { className: "text-center text-xs opacity-60 mt-6", children: [
+          "Version: ",
+          appVersion
         ] })
       ] })
     ] }),
