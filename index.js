@@ -3481,12 +3481,25 @@ var ConfirmModal = ({ title, message, confirmText = "Confirm", onConfirm, onCanc
 };
 var ConfirmModal_default = ConfirmModal;
 
-// App.tsx
+// components/UpdatePrompt.tsx
 import { jsx as jsx16, jsxs as jsxs15 } from "react/jsx-runtime";
-var VolumeOnIcon = () => /* @__PURE__ */ jsx16("svg", { xmlns: "http://www.w3.org/2000/svg", viewBox: "0 0 24 24", fill: "currentColor", children: /* @__PURE__ */ jsx16("path", { d: "M13.5 4.06c0-1.34-1.61-2.25-2.83-1.46L5.43 6H3a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h2.43l5.24 3.4c1.22.79 2.83-.12 2.83-1.46V4.06zM18.5 12c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM20 12c0 2.76-1.74 5.09-4.01 6.04v-12c2.27.95 4.01 3.27 4.01 5.96z" }) });
-var VolumeOffIcon = () => /* @__PURE__ */ jsx16("svg", { xmlns: "http://www.w3.org/2000/svg", viewBox: "0 0 24 24", fill: "currentColor", children: /* @__PURE__ */ jsx16("path", { d: "M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3a1 1 0 0 0-1 1v4a1 1 0 0 0 1 1h3.73L12 18.27v-5.52l4.51 4.51c-.67.43-1.4.76-2.18.98v2.06a8.99 8.99 0 0 0 3.65-1.49L19.73 21 21 19.73l-9-9L4.27 3zM12 4.06L7.22 7.54 12 12.31V4.06z" }) });
-var QuestionMarkIcon = () => /* @__PURE__ */ jsx16("svg", { xmlns: "http://www.w3.org/2000/svg", viewBox: "0 0 24 24", fill: "currentColor", children: /* @__PURE__ */ jsx16("path", { d: "M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17h-2v-2h2v2zm2.07-7.75l-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H8c0-2.21 1.79-4 4-4s4 1.79 4 4c0 .88-.36 1.68-.93 2.25z" }) });
-var TrophyIcon = () => /* @__PURE__ */ jsx16("svg", { xmlns: "http://www.w3.org/2000/svg", viewBox: "0 0 24 24", fill: "currentColor", children: /* @__PURE__ */ jsx16("path", { d: "M19 5h-2V3H7v2H5c-1.1 0-2 .9-2 2v1c0 2.55 1.92 4.63 4.39 4.94.63 1.5 1.98 2.63 3.61 2.96V19H7v2h10v-2h-4v-3.1c1.63-.33 2.98-1.46 3.61-2.96C19.08 12.63 21 10.55 21 8V7c0-1.1-.9-2-2-2zM5 8V7h2v3.82C5.84 10.4 5 9.3 5 8zm7 6c-1.65 0-3-1.35-3-3V3h6v10c0 1.65-1.35 3-3 3zm7-6c0 1.3-.84 2.4-2 2.82V7h2v1z" }) });
+var UpdatePrompt = ({ onUpdate }) => {
+  return /* @__PURE__ */ jsx16("div", { className: "fixed bottom-0 left-0 right-0 p-4 z-50 transform translate-y-0 transition-transform duration-300 ease-in-out prompt-panel", children: /* @__PURE__ */ jsxs15("div", { className: "max-w-xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4 text-center sm:text-left", children: [
+    /* @__PURE__ */ jsxs15("div", { className: "flex-grow", children: [
+      /* @__PURE__ */ jsx16("h3", { className: "m-0 mb-1 text-lg font-semibold", children: "Update Available" }),
+      /* @__PURE__ */ jsx16("p", { className: "m-0 text-sm leading-snug", children: "A new version of Caz Connect is ready. Reload to get the latest features!" })
+    ] }),
+    /* @__PURE__ */ jsx16("div", { className: "flex gap-2.5 flex-shrink-0", children: /* @__PURE__ */ jsx16("button", { onClick: onUpdate, className: "py-2 px-4 font-semibold rounded-lg bg-green-500 text-white", children: "Reload" }) })
+  ] }) });
+};
+var UpdatePrompt_default = UpdatePrompt;
+
+// App.tsx
+import { jsx as jsx17, jsxs as jsxs16 } from "react/jsx-runtime";
+var VolumeOnIcon = () => /* @__PURE__ */ jsx17("svg", { xmlns: "http://www.w3.org/2000/svg", viewBox: "0 0 24 24", fill: "currentColor", children: /* @__PURE__ */ jsx17("path", { d: "M13.5 4.06c0-1.34-1.61-2.25-2.83-1.46L5.43 6H3a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h2.43l5.24 3.4c1.22.79 2.83-.12 2.83-1.46V4.06zM18.5 12c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM20 12c0 2.76-1.74 5.09-4.01 6.04v-12c2.27.95 4.01 3.27 4.01 5.96z" }) });
+var VolumeOffIcon = () => /* @__PURE__ */ jsx17("svg", { xmlns: "http://www.w3.org/2000/svg", viewBox: "0 0 24 24", fill: "currentColor", children: /* @__PURE__ */ jsx17("path", { d: "M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3a1 1 0 0 0-1 1v4a1 1 0 0 0 1 1h3.73L12 18.27v-5.52l4.51 4.51c-.67.43-1.4.76-2.18.98v2.06a8.99 8.99 0 0 0 3.65-1.49L19.73 21 21 19.73l-9-9L4.27 3zM12 4.06L7.22 7.54 12 12.31V4.06z" }) });
+var QuestionMarkIcon = () => /* @__PURE__ */ jsx17("svg", { xmlns: "http://www.w3.org/2000/svg", viewBox: "0 0 24 24", fill: "currentColor", children: /* @__PURE__ */ jsx17("path", { d: "M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17h-2v-2h2v2zm2.07-7.75l-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H8c0-2.21 1.79-4 4-4s4 1.79 4 4c0 .88-.36 1.68-.93 2.25z" }) });
+var TrophyIcon = () => /* @__PURE__ */ jsx17("svg", { xmlns: "http://www.w3.org/2000/svg", viewBox: "0 0 24 24", fill: "currentColor", children: /* @__PURE__ */ jsx17("path", { d: "M19 5h-2V3H7v2H5c-1.1 0-2 .9-2 2v1c0 2.55 1.92 4.63 4.39 4.94.63 1.5 1.98 2.63 3.61 2.96V19H7v2h10v-2h-4v-3.1c1.63-.33 2.98-1.46 3.61-2.96C19.08 12.63 21 10.55 21 8V7c0-1.1-.9-2-2-2zM5 8V7h2v3.82C5.84 10.4 5 9.3 5 8zm7 6c-1.65 0-3-1.35-3-3V3h6v10c0 1.65-1.35 3-3 3zm7-6c0 1.3-.84 2.4-2 2.82V7h2v1z" }) });
 var App = () => {
   const {
     board,
@@ -3535,7 +3548,39 @@ var App = () => {
     actions
   } = useGameLogic();
   const [showPlayerStatsModal, setShowPlayerStatsModal] = useState9(false);
+  const [waitingWorker, setWaitingWorker] = useState9(null);
+  const [showUpdatePrompt, setShowUpdatePrompt] = useState9(false);
   const wakeLock = useRef5(null);
+  useEffect5(() => {
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("./sw.js").then((registration) => {
+        registration.addEventListener("updatefound", () => {
+          const newWorker = registration.installing;
+          if (newWorker) {
+            newWorker.addEventListener("statechange", () => {
+              if (newWorker.state === "installed" && navigator.serviceWorker.controller) {
+                setWaitingWorker(newWorker);
+                setShowUpdatePrompt(true);
+              }
+            });
+          }
+        });
+      });
+      let refreshing = false;
+      navigator.serviceWorker.addEventListener("controllerchange", () => {
+        if (!refreshing) {
+          window.location.reload();
+          refreshing = true;
+        }
+      });
+    }
+  }, []);
+  const handleUpdate = () => {
+    if (waitingWorker) {
+      waitingWorker.postMessage({ type: "SKIP_WAITING" });
+      setShowUpdatePrompt(false);
+    }
+  };
   useEffect5(() => {
     document.body.className = `theme-${theme}`;
   }, [theme]);
@@ -3578,36 +3623,36 @@ var App = () => {
     };
   }, []);
   const isBoardDisabled = isThinking || isSimulating || isTutorialActive && !isTutorialInteractive || !!animationInfo;
-  return /* @__PURE__ */ jsxs15("div", { className: "main-container mx-auto p-2.5 flex flex-col items-center gap-5 max-w-lg lg:max-w-6xl lg:grid lg:grid-cols-[minmax(350px,_1fr)_1.5fr] lg:grid-rows-[auto_1fr] lg:[grid-template-areas:'title_game'_'info_game'] lg:items-start lg:gap-10", children: [
-    /* @__PURE__ */ jsxs15("div", { className: "order-1 w-full lg:[grid-area:title]", children: [
-      /* @__PURE__ */ jsx16(
+  return /* @__PURE__ */ jsxs16("div", { className: "main-container mx-auto p-2.5 flex flex-col items-center gap-5 max-w-lg lg:max-w-6xl lg:grid lg:grid-cols-[minmax(350px,_1fr)_1.5fr] lg:grid-rows-[auto_1fr] lg:[grid-template-areas:'title_game'_'info_game'] lg:items-start lg:gap-10", children: [
+    /* @__PURE__ */ jsxs16("div", { className: "order-1 w-full lg:[grid-area:title]", children: [
+      /* @__PURE__ */ jsx17(
         Header_default,
         {
           isThinking: isThinking || isSimulating
         }
       ),
-      /* @__PURE__ */ jsxs15("div", { className: "flex flex-row items-center justify-center gap-4 w-full mt-2", children: [
-        /* @__PURE__ */ jsx16(
+      /* @__PURE__ */ jsxs16("div", { className: "flex flex-row items-center justify-center gap-4 w-full mt-2", children: [
+        /* @__PURE__ */ jsx17(
           "button",
           {
             onClick: actions.toggleMute,
             "aria-label": "Mute sound",
             title: isMuted ? "Unmute" : "Mute",
             className: "w-11 h-11 p-2 rounded-full cursor-pointer flex-shrink-0 header-button",
-            children: isMuted ? /* @__PURE__ */ jsx16(VolumeOffIcon, {}) : /* @__PURE__ */ jsx16(VolumeOnIcon, {})
+            children: isMuted ? /* @__PURE__ */ jsx17(VolumeOffIcon, {}) : /* @__PURE__ */ jsx17(VolumeOnIcon, {})
           }
         ),
-        /* @__PURE__ */ jsx16(
+        /* @__PURE__ */ jsx17(
           "button",
           {
             onClick: actions.openRulesModal,
             "aria-label": "How to Play",
             title: "How to Play",
             className: "w-11 h-11 p-2 rounded-full cursor-pointer flex-shrink-0 header-button",
-            children: /* @__PURE__ */ jsx16(QuestionMarkIcon, {})
+            children: /* @__PURE__ */ jsx17(QuestionMarkIcon, {})
           }
         ),
-        /* @__PURE__ */ jsx16(
+        /* @__PURE__ */ jsx17(
           "button",
           {
             onClick: () => {
@@ -3617,13 +3662,13 @@ var App = () => {
             "aria-label": "Player Stats",
             title: "Player Stats",
             className: "w-11 h-11 p-2 rounded-full cursor-pointer flex-shrink-0 header-button",
-            children: /* @__PURE__ */ jsx16(TrophyIcon, {})
+            children: /* @__PURE__ */ jsx17(TrophyIcon, {})
           }
         )
       ] })
     ] }),
-    /* @__PURE__ */ jsxs15("main", { className: "game-area order-2 flex flex-col items-center w-full lg:min-w-[525px] lg:justify-center lg:[grid-area:game]", children: [
-      /* @__PURE__ */ jsx16(
+    /* @__PURE__ */ jsxs16("main", { className: "game-area order-2 flex flex-col items-center w-full lg:min-w-[525px] lg:justify-center lg:[grid-area:game]", children: [
+      /* @__PURE__ */ jsx17(
         Status_default,
         {
           statusText: gameStatus,
@@ -3638,7 +3683,7 @@ var App = () => {
           gameOver
         }
       ),
-      /* @__PURE__ */ jsx16(
+      /* @__PURE__ */ jsx17(
         Board_default,
         {
           board,
@@ -3657,7 +3702,7 @@ var App = () => {
         }
       )
     ] }),
-    /* @__PURE__ */ jsx16("aside", { className: "info-area order-3 flex flex-col gap-5 w-full items-center lg:justify-start lg:[grid-area:info]", children: /* @__PURE__ */ jsx16(
+    /* @__PURE__ */ jsx17("aside", { className: "info-area order-3 flex flex-col gap-5 w-full items-center lg:justify-start lg:[grid-area:info]", children: /* @__PURE__ */ jsx17(
       Controls_default,
       {
         gameMode,
@@ -3699,7 +3744,7 @@ var App = () => {
         isTutorialActive
       }
     ) }),
-    isTutorialActive && /* @__PURE__ */ jsx16(
+    isTutorialActive && /* @__PURE__ */ jsx17(
       TutorialMessage_default,
       {
         text: tutorialText,
@@ -3708,14 +3753,15 @@ var App = () => {
         onSkip: actions.endTutorial
       }
     ),
-    installPrompt.visible && !isTutorialActive && /* @__PURE__ */ jsx16(
+    installPrompt.visible && !isTutorialActive && /* @__PURE__ */ jsx17(
       InstallPrompt_default,
       {
         onInstall: installPrompt.trigger,
         onDismiss: installPrompt.dismiss
       }
     ),
-    confirmAction && confirmAction.isOpen && /* @__PURE__ */ jsx16(
+    showUpdatePrompt && /* @__PURE__ */ jsx17(UpdatePrompt_default, { onUpdate: handleUpdate }),
+    confirmAction && confirmAction.isOpen && /* @__PURE__ */ jsx17(
       ConfirmModal_default,
       {
         title: confirmAction.title,
@@ -3725,7 +3771,7 @@ var App = () => {
         onCancel: actions.cancelConfirmAction
       }
     ),
-    showPlayerStatsModal && /* @__PURE__ */ jsx16(
+    showPlayerStatsModal && /* @__PURE__ */ jsx17(
       PlayerStatsModal_default,
       {
         onClose: () => {
@@ -3738,7 +3784,7 @@ var App = () => {
         isLabUnlocked
       }
     ),
-    showRulesModal && /* @__PURE__ */ jsx16(
+    showRulesModal && /* @__PURE__ */ jsx17(
       RulesModal_default,
       {
         onClose: actions.closeRulesModal,
@@ -3748,8 +3794,8 @@ var App = () => {
         }
       }
     ),
-    showUnlockModal && /* @__PURE__ */ jsx16(UnlockModal_default, { onDismiss: actions.dismissUnlockModal }),
-    showGameOverModal && /* @__PURE__ */ jsx16(
+    showUnlockModal && /* @__PURE__ */ jsx17(UnlockModal_default, { onDismiss: actions.dismissUnlockModal }),
+    showGameOverModal && /* @__PURE__ */ jsx17(
       GameOverModal_default,
       {
         board,
@@ -3770,21 +3816,12 @@ var App = () => {
 var App_default = App;
 
 // index.tsx
-import { jsx as jsx17 } from "react/jsx-runtime";
-if ("serviceWorker" in navigator) {
-  window.addEventListener("load", () => {
-    navigator.serviceWorker.register("./sw.js").then((registration) => {
-      console.log("SW registered: ", registration);
-    }).catch((registrationError) => {
-      console.log("SW registration failed: ", registrationError);
-    });
-  });
-}
+import { jsx as jsx18 } from "react/jsx-runtime";
 var rootElement = document.getElementById("root");
 if (!rootElement) {
   throw new Error("Could not find root element to mount to");
 }
 var root = ReactDOM.createRoot(rootElement);
 root.render(
-  /* @__PURE__ */ jsx17(React9.StrictMode, { children: /* @__PURE__ */ jsx17(App_default, {}) })
+  /* @__PURE__ */ jsx18(React9.StrictMode, { children: /* @__PURE__ */ jsx18(App_default, {}) })
 );

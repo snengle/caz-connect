@@ -1,7 +1,8 @@
-const CACHE_NAME = 'caz-connect-cache-v1';
+const CACHE_NAME = 'caz-connect-cache-v1.1.1';
 const URLS_TO_CACHE = [
   './',
   './index.html',
+  './index.js',
   './manifest.json',
   './professor-caz.png',
   './place.mp3',
@@ -67,4 +68,11 @@ self.addEventListener('activate', event => {
       );
     })
   );
+});
+
+// Listen for a message from the client to skip waiting and activate the new SW
+self.addEventListener('message', event => {
+    if (event.data && event.data.type === 'SKIP_WAITING') {
+        self.skipWaiting();
+    }
 });
