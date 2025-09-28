@@ -3,7 +3,7 @@ import React9 from "react";
 import ReactDOM from "react-dom/client";
 
 // App.tsx
-import { useEffect as useEffect5, useState as useState9 } from "react";
+import { useEffect as useEffect5, useState as useState9, useRef as useRef5 } from "react";
 
 // hooks/useGameLogic.ts
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
@@ -189,6 +189,31 @@ var getCanonicalMoveHistoryString = (history) => {
   }
   return symmetries.sort()[0];
 };
+var boardToKey = (board) => {
+  return board.map((row) => row.map((cell) => cell || "-").join("")).join("|");
+};
+var flipBoard = (board) => {
+  return board.map((row) => [...row].reverse());
+};
+var rotateBoard = (board) => {
+  const newBoard = createInitialBoard();
+  for (let r = 0; r < BOARD_SIZE; r++) {
+    for (let c = 0; c < BOARD_SIZE; c++) {
+      newBoard[c][BOARD_SIZE - 1 - r] = board[r][c];
+    }
+  }
+  return newBoard;
+};
+var getCanonicalBoardKey = (board) => {
+  const symmetries = [];
+  let currentBoard = board;
+  for (let i = 0; i < 4; i++) {
+    symmetries.push(boardToKey(currentBoard));
+    symmetries.push(boardToKey(flipBoard(currentBoard)));
+    currentBoard = rotateBoard(currentBoard);
+  }
+  return symmetries.sort()[0];
+};
 var INITIAL_SCORES = {
   ["pvc" /* PvC */]: { [PLAYER_X]: 0, [PLAYER_O]: 0 },
   ["pvp" /* PvP */]: { [PLAYER_X]: 0, [PLAYER_O]: 0 },
@@ -280,6 +305,7 @@ var useGameLogic = () => {
   const [showRulesModal, setShowRulesModal] = useState(false);
   const [showUnlockModal, setShowUnlockModal] = useState(false);
   const [showGameOverModal, setShowGameOverModal] = useState(false);
+  const [confirmAction, setConfirmAction] = useState(null);
   const [adaptiveLevel, setAdaptiveLevel] = useState(() => {
     try {
       const saved = localStorage.getItem("cazConnectAdaptiveLevel");
@@ -669,6 +695,10 @@ var useGameLogic = () => {
     setShowGameOverModal(false);
     setLevelChange(null);
   }, [playSound]);
+  const cancelConfirmAction = useCallback(() => {
+    playSound("uiclick");
+    setConfirmAction(null);
+  }, [playSound]);
   const setPlayerName = useCallback((name) => {
     const trimmedName = name.trim();
     setPlayerNameInternal(trimmedName ? trimmedName.slice(0, 15) : "Player");
@@ -758,7 +788,7 @@ var useGameLogic = () => {
     setShowGameOverModal(false);
     setLevelChange(null);
   }, []);
-  const resetGame = useCallback(() => {
+  const _startNewGame = useCallback(() => {
     playSound("uiclick");
     masterReset(nextStarter);
     setNextStarter((s) => s === PLAYER_X ? PLAYER_O : PLAYER_X);
@@ -1104,9 +1134,9 @@ var useGameLogic = () => {
       setGameMode(savedGameState.gameMode);
       setSavedGameState(null);
     } else {
-      resetGame();
+      _startNewGame();
     }
-  }, [savedGameState, resetGame, grantAchievement, playSound]);
+  }, [savedGameState, _startNewGame, grantAchievement, playSound]);
   useEffect(() => {
     if (!tutorialState.active) {
       executedTutorialStep.current = -1;
@@ -1286,7 +1316,23 @@ var useGameLogic = () => {
     }
     return score;
   };
-  const minimax = (currentBoard, currentMovesMade, depth, alpha, beta, maximizingPlayer, scoringFunction, moveHistory2, memory, moveList = null) => {
+  const minimax = (currentBoard, currentMovesMade, depth, alpha, beta, maximizingPlayer, scoringFunction, moveHistory2, memory, transpositionTable, moveList = null) => {
+    const originalAlpha = alpha;
+    const boardKey = getCanonicalBoardKey(currentBoard);
+    const storedEntry = transpositionTable.get(boardKey);
+    if (storedEntry && storedEntry.depth >= depth) {
+      if (storedEntry.flag === "EXACT") {
+        return { score: storedEntry.score, move: storedEntry.move };
+      }
+      if (storedEntry.flag === "LOWERBOUND") {
+        alpha = Math.max(alpha, storedEntry.score);
+      } else if (storedEntry.flag === "UPPERBOUND") {
+        beta = Math.min(beta, storedEntry.score);
+      }
+      if (alpha >= beta) {
+        return { score: storedEntry.score, move: storedEntry.move };
+      }
+    }
     if (moveHistory2.length > 0 && memory.wins.length + memory.losses.length > 0) {
       const canonicalHistory = getCanonicalMoveHistoryString(moveHistory2);
       if (memory.wins.some((w) => w.moves === canonicalHistory)) return { score: 2e5 + depth * 100 };
@@ -1301,6 +1347,13 @@ var useGameLogic = () => {
       if (winForHuman) return { score: -1e5 - depth * 100 };
       return { score: scoringFunction(currentBoard, AI_PLAYER) };
     }
+    if (storedEntry?.move) {
+      const moveIndex = moves.findIndex((m) => m.r === storedEntry.move.r && m.c === storedEntry.move.c);
+      if (moveIndex > 0) {
+        const [best] = moves.splice(moveIndex, 1);
+        moves.unshift(best);
+      }
+    }
     let bestMove = moves[0];
     if (maximizingPlayer) {
       let maxEval = -Infinity;
@@ -1308,13 +1361,24 @@ var useGameLogic = () => {
         const newBoard = currentBoard.map((r) => [...r]);
         newBoard[move.r][move.c] = AI_PLAYER;
         const newHistory = [...moveHistory2, { player: AI_PLAYER, r: move.r, c: move.c }];
-        const { score } = minimax(newBoard, currentMovesMade + 1, depth - 1, alpha, beta, false, scoringFunction, newHistory, memory);
+        const { score } = minimax(newBoard, currentMovesMade + 1, depth - 1, alpha, beta, false, scoringFunction, newHistory, memory, transpositionTable);
         if (score > maxEval) {
           maxEval = score;
           bestMove = move;
         }
         alpha = Math.max(alpha, score);
         if (beta <= alpha) break;
+      }
+      let flag;
+      if (maxEval <= originalAlpha) {
+        flag = "UPPERBOUND";
+      } else if (maxEval >= beta) {
+        flag = "LOWERBOUND";
+      } else {
+        flag = "EXACT";
+      }
+      if (!storedEntry || depth >= storedEntry.depth) {
+        transpositionTable.set(boardKey, { depth, score: maxEval, flag, move: bestMove });
       }
       return { score: maxEval, move: bestMove };
     } else {
@@ -1323,7 +1387,7 @@ var useGameLogic = () => {
         const newBoard = currentBoard.map((r) => [...r]);
         newBoard[move.r][move.c] = HUMAN_PLAYER;
         const newHistory = [...moveHistory2, { player: HUMAN_PLAYER, r: move.r, c: move.c }];
-        const { score } = minimax(newBoard, currentMovesMade + 1, depth - 1, alpha, beta, true, scoringFunction, newHistory, memory);
+        const { score } = minimax(newBoard, currentMovesMade + 1, depth - 1, alpha, beta, true, scoringFunction, newHistory, memory, transpositionTable);
         if (score < minEval) {
           minEval = score;
           bestMove = move;
@@ -1331,26 +1395,45 @@ var useGameLogic = () => {
         beta = Math.min(beta, score);
         if (beta <= alpha) break;
       }
+      let flag;
+      if (minEval <= originalAlpha) {
+        flag = "UPPERBOUND";
+      } else if (minEval >= beta) {
+        flag = "LOWERBOUND";
+      } else {
+        flag = "EXACT";
+      }
+      if (!storedEntry || depth >= storedEntry.depth) {
+        transpositionTable.set(boardKey, { depth, score: minEval, flag, move: bestMove });
+      }
       return { score: minEval, move: bestMove };
     }
   };
   const getBestMove = (player, moves, currentBoard, gameHistory, currentMovesMade, memory, depth, scoringFunction) => {
-    const immediateWinMove = moves.find((move2) => {
+    moves.sort((a, b) => POSITIONAL_VALUE_MAP[b.r][b.c] - POSITIONAL_VALUE_MAP[a.r][a.c]);
+    const immediateWinMove = moves.find((move) => {
       const tempBoard = currentBoard.map((r) => [...r]);
-      tempBoard[move2.r][move2.c] = player;
+      tempBoard[move.r][move.c] = player;
       return checkWin(player, tempBoard);
     });
     if (immediateWinMove) return immediateWinMove;
     const opponent = player === PLAYER_X ? PLAYER_O : PLAYER_X;
-    const immediateBlockMove = moves.find((move2) => {
+    const immediateBlockMove = moves.find((move) => {
       const tempBoard = currentBoard.map((r) => [...r]);
-      tempBoard[move2.r][move2.c] = opponent;
+      tempBoard[move.r][move.c] = opponent;
       return checkWin(opponent, tempBoard);
     });
     if (immediateBlockMove) return immediateBlockMove;
+    const transpositionTable = /* @__PURE__ */ new Map();
     const isMaximizing = player === AI_PLAYER;
-    const { move } = minimax(currentBoard, currentMovesMade, depth, -Infinity, Infinity, isMaximizing, scoringFunction, gameHistory, memory, moves);
-    return move || moves[Math.floor(Math.random() * moves.length)];
+    let bestMove;
+    for (let d = 1; d <= depth; d++) {
+      const result = minimax(currentBoard, currentMovesMade, d, -Infinity, Infinity, isMaximizing, scoringFunction, gameHistory, memory, transpositionTable, moves);
+      if (result.move) {
+        bestMove = result.move;
+      }
+    }
+    return bestMove || moves[Math.floor(Math.random() * moves.length)];
   };
   const computerMove = useCallback(() => {
     const movePromise = (async () => {
@@ -1400,17 +1483,59 @@ var useGameLogic = () => {
           if (immediateBlockMove) {
             bestMove = immediateBlockMove;
           } else {
-            bestMove = potentialMoves[Math.floor(Math.random() * potentialMoves.length)];
+            const weightedList = [];
+            potentialMoves.forEach((move) => {
+              const weight = 1 + POSITIONAL_VALUE_MAP[move.r][move.c];
+              for (let i = 0; i < weight; i++) {
+                weightedList.push(move);
+              }
+            });
+            if (weightedList.length > 0) {
+              bestMove = weightedList[Math.floor(Math.random() * weightedList.length)];
+            }
+          }
+        }
+      } else if (adaptiveLevel === 1 || adaptiveLevel === 2) {
+        const settings = [
+          null,
+          { depth: 1, strategic: false, threshold: 80 },
+          // 1: Novice
+          { depth: 2, strategic: false, threshold: 40 }
+          // 2: Intermediate
+        ];
+        const currentSetting = settings[adaptiveLevel];
+        const scoringFunction = currentSetting.strategic ? scorePositionStrategic : scorePositionTactical;
+        const transpositionTable = /* @__PURE__ */ new Map();
+        const moveScores = [];
+        for (const move of potentialMoves) {
+          const newBoard = board.map((r) => [...r]);
+          newBoard[move.r][move.c] = AI_PLAYER;
+          if (checkWin(AI_PLAYER, newBoard)) {
+            moveScores.push({ move, score: Infinity });
+            break;
+          }
+          const newHistory = [...moveHistory, { player: AI_PLAYER, r: move.r, c: move.c }];
+          const { score } = minimax(newBoard, movesMade + 1, currentSetting.depth, -Infinity, Infinity, false, scoringFunction, newHistory, { wins: [], losses: [] }, transpositionTable);
+          moveScores.push({ move, score });
+        }
+        if (moveScores.length > 0) {
+          const bestScore = Math.max(...moveScores.map((ms) => ms.score));
+          if (bestScore === Infinity) {
+            bestMove = moveScores.find((ms) => ms.score === Infinity).move;
+          } else {
+            const goodMoves = moveScores.filter((ms) => ms.score >= bestScore - currentSetting.threshold).map((ms) => ms.move);
+            if (goodMoves.length > 0) {
+              bestMove = goodMoves[Math.floor(Math.random() * goodMoves.length)];
+            } else {
+              bestMove = moveScores.sort((a, b) => b.score - a.score)[0].move;
+            }
           }
         }
       } else {
         const settings = [
           null,
-          // Level 0 is handled above
-          { depth: 1, strategic: false, useMemory: false },
-          // 1: Novice
-          { depth: 2, strategic: false, useMemory: false },
-          // 2: Intermediate
+          null,
+          null,
           { depth: 3, strategic: true, useMemory: false },
           // 3: Expert
           { depth: 3, strategic: true, useMemory: true },
@@ -1421,7 +1546,7 @@ var useGameLogic = () => {
         const currentSetting = settings[adaptiveLevel];
         if (currentSetting) {
           const scoringFunction = currentSetting.strategic ? scorePositionStrategic : scorePositionTactical;
-          const memoryToUse = currentSetting.useMemory ? gameMemory : { wins: [], losses: [] };
+          const memoryToUse = currentSetting.useMemory && isAiLearningEnabled ? gameMemory : { wins: [], losses: [] };
           bestMove = getBestMove(
             AI_PLAYER,
             potentialMoves,
@@ -1453,7 +1578,7 @@ var useGameLogic = () => {
         makeMove(randomMove.r, randomMove.c);
       }
     }).finally(() => setIsThinking(false));
-  }, [validMoves, board, movesMade, makeMove, moveHistory, gameMemory, adaptiveLevel, tutorialState.active]);
+  }, [validMoves, board, movesMade, makeMove, moveHistory, gameMemory, adaptiveLevel, tutorialState.active, isAiLearningEnabled]);
   useEffect(() => {
     if (!gameOver && gameMode === "pvc" /* PvC */ && currentPlayer === AI_PLAYER && !animationInfo) {
       if (tutorialState.active) {
@@ -1550,7 +1675,7 @@ var useGameLogic = () => {
     isSimulatingRef.current = false;
     setSimulationStatus("");
     alert(`AI training complete! Memory now has ${currentMemory.wins.length} winning paths and ${currentMemory.losses.length} losing paths.`);
-    resetGame();
+    _startNewGame();
   };
   const stopSimulation = () => {
     playSound("uiclick");
@@ -1646,8 +1771,55 @@ Losses: ${importedMemory.losses.length}`);
   }, [playSound]);
   const setAdaptiveLevelManual = useCallback((level) => {
     playSound("uiclick");
-    setAdaptiveLevel(level);
-  }, [playSound]);
+    if (adaptiveLevel === level) return;
+    if (movesMade > 0 && !gameOver && gameMode === "pvc" /* PvC */) {
+      setConfirmAction({
+        isOpen: true,
+        title: "Change Difficulty?",
+        message: "This will forfeit the current game and count as a loss. Are you sure?",
+        confirmText: "Forfeit & Change",
+        onConfirm: () => {
+          playSound("uiclick");
+          recordGameResult(moveHistory, AI_PLAYER);
+          setAdaptiveLevel(level);
+          _startNewGame();
+          setConfirmAction(null);
+        }
+      });
+    } else {
+      setAdaptiveLevel(level);
+      if (gameOver) {
+        _startNewGame();
+      }
+    }
+  }, [playSound, adaptiveLevel, movesMade, gameOver, gameMode, recordGameResult, _startNewGame, moveHistory]);
+  const resetGame = useCallback(() => {
+    if (movesMade > 0 && !gameOver) {
+      setConfirmAction({
+        isOpen: true,
+        title: "Forfeit Game?",
+        message: "Starting a new game will count the current one as a loss. Are you sure?",
+        confirmText: "Forfeit & Restart",
+        onConfirm: () => {
+          playSound("uiclick");
+          if (gameMode === "pvc" /* PvC */) {
+            recordGameResult(moveHistory, AI_PLAYER);
+          } else if (gameMode === "pvp" /* PvP */) {
+            const winner = currentPlayer === PLAYER_X ? PLAYER_O : PLAYER_X;
+            setScores((prev) => {
+              const newScores = JSON.parse(JSON.stringify(prev));
+              newScores[gameMode][winner]++;
+              return newScores;
+            });
+          }
+          _startNewGame();
+          setConfirmAction(null);
+        }
+      });
+    } else {
+      _startNewGame();
+    }
+  }, [movesMade, gameOver, gameMode, currentPlayer, moveHistory, recordGameResult, _startNewGame, playSound]);
   return {
     board,
     gameStatus,
@@ -1673,6 +1845,7 @@ Losses: ${importedMemory.losses.length}`);
     isAiLearningEnabled,
     levelChange,
     showRulesModal,
+    confirmAction,
     playerName,
     playerPiece,
     playerOName,
@@ -1693,6 +1866,7 @@ Losses: ${importedMemory.losses.length}`);
     gameOver,
     onlineRole,
     gameStateString,
+    movesMade,
     actions: {
       handleCellClick,
       resetGame,
@@ -1714,6 +1888,7 @@ Losses: ${importedMemory.losses.length}`);
       dismissGameOverModal,
       openRulesModal,
       closeRulesModal,
+      cancelConfirmAction,
       toggleAutoAdjustLevel,
       setAdaptiveLevelManual,
       toggleIsAiLearningEnabled,
@@ -2174,9 +2349,116 @@ var OnlineControls = ({ onlineRole, setOnlineRole, gameStateString, loadOnlineGa
 };
 var OnlineControls_default = OnlineControls;
 
-// components/Controls.tsx
+// components/ReleaseNotesModal.tsx
 import { jsx as jsx7, jsxs as jsxs6 } from "react/jsx-runtime";
-var SectionHeader = ({ children }) => /* @__PURE__ */ jsx7("h3", { className: "text-sm font-bold uppercase tracking-wider mb-2 mt-4 first:mt-0 section-header", children });
+var ReleaseNotesModal = ({ onClose }) => {
+  return /* @__PURE__ */ jsx7(
+    "div",
+    {
+      className: "fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4 animate-fade-in-fast",
+      onClick: onClose,
+      children: /* @__PURE__ */ jsxs6(
+        "div",
+        {
+          className: "component-panel rounded-lg p-6 max-w-lg w-full text-center relative transform animate-pop-in-modal max-h-[90vh] flex flex-col",
+          onClick: (e) => e.stopPropagation(),
+          children: [
+            /* @__PURE__ */ jsx7("h2", { className: "text-3xl font-bold title-font mb-4", style: { color: "var(--text-header)" }, children: "Version 1.1.1 Patch Notes" }),
+            /* @__PURE__ */ jsxs6("div", { className: "overflow-y-auto text-left space-y-4 text-base pr-2 -mr-2", children: [
+              /* @__PURE__ */ jsx7("p", { children: "This is a major update focused on significantly upgrading Professor Caz's AI and improving the overall quality of life for all players." }),
+              /* @__PURE__ */ jsxs6("div", { children: [
+                /* @__PURE__ */ jsx7("h3", { className: "font-bold text-lg", style: { color: "var(--text-panel)" }, children: "Major AI Overhaul: The Professor's Brain Upgrade" }),
+                /* @__PURE__ */ jsxs6("ul", { className: "list-disc list-inside space-y-2 mt-2 text-sm", children: [
+                  /* @__PURE__ */ jsxs6("li", { children: [
+                    /* @__PURE__ */ jsx7("strong", { children: "Blazing Fast Performance:" }),
+                    " The AI's core logic has been rewritten to use an advanced technique called ",
+                    /* @__PURE__ */ jsx7("strong", { children: "Bitboards" }),
+                    ". This makes his move calculations, board evaluations, and win-checking hundreds of times faster. You'll notice near-instantaneous moves, even on the highest difficulty levels."
+                  ] }),
+                  /* @__PURE__ */ jsxs6("li", { children: [
+                    /* @__PURE__ */ jsx7("strong", { children: "Enhanced Tactical Strength:" }),
+                    " We've implemented ",
+                    /* @__PURE__ */ jsx7("strong", { children: "Quiescence Search" }),
+                    ', a powerful optimization that helps the AI avoid the "horizon effect." Professor Caz is now much better at spotting and defending against multi-move threats.'
+                  ] }),
+                  /* @__PURE__ */ jsxs6("li", { children: [
+                    /* @__PURE__ */ jsx7("strong", { children: "Smarter Search:" }),
+                    " The AI now recognizes ",
+                    /* @__PURE__ */ jsx7("strong", { children: "Board Symmetries" }),
+                    ". He understands that a rotated or reflected board is strategically the same, preventing him from wasting time recalculating identical positions. This, combined with improved ",
+                    /* @__PURE__ */ jsx7("strong", { children: "Move Ordering" }),
+                    " and ",
+                    /* @__PURE__ */ jsx7("strong", { children: "Iterative Deepening" }),
+                    ", allows him to think deeper and more efficiently."
+                  ] }),
+                  /* @__PURE__ */ jsxs6("li", { children: [
+                    /* @__PURE__ */ jsx7("strong", { children: "Less Predictable, More Human (Lower Levels):" }),
+                    ' The AI is now much less predictable on easier difficulties, providing a more engaging experience. "Beginner" makes more purposeful, weighted-random moves, while "Novice" and "Intermediate" will now choose from a pool of "good" moves rather than the single "perfect" move every time.'
+                  ] })
+                ] })
+              ] }),
+              /* @__PURE__ */ jsxs6("div", { children: [
+                /* @__PURE__ */ jsx7("h3", { className: "font-bold text-lg", style: { color: "var(--text-panel)" }, children: "Quality of Life & UI/UX Improvements" }),
+                /* @__PURE__ */ jsxs6("ul", { className: "list-disc list-inside space-y-2 mt-2 text-sm", children: [
+                  /* @__PURE__ */ jsxs6("li", { children: [
+                    /* @__PURE__ */ jsx7("strong", { children: "Forfeit Confirmation:" }),
+                    " Starting a new game or changing the difficulty mid-match now brings up a confirmation pop-up, asking if you want to forfeit the current game (which will count as a loss). No more accidental resets!"
+                  ] }),
+                  /* @__PURE__ */ jsxs6("li", { children: [
+                    /* @__PURE__ */ jsx7("strong", { children: "Screen Wake Lock:" }),
+                    " For our mobile players, the screen will no longer automatically lock or turn off while you're in the middle of a game."
+                  ] }),
+                  /* @__PURE__ */ jsxs6("li", { children: [
+                    /* @__PURE__ */ jsx7("strong", { children: "Interactive Trophies:" }),
+                    " In the Player Stats modal, you can now click on any *unlocked* achievement to see its full name and description."
+                  ] }),
+                  /* @__PURE__ */ jsxs6("li", { children: [
+                    /* @__PURE__ */ jsx7("strong", { children: "No More Interruptions:" }),
+                    " The right-click context menu has been disabled to prevent it from accidentally pausing the AI's turn."
+                  ] })
+                ] })
+              ] }),
+              /* @__PURE__ */ jsxs6("div", { children: [
+                /* @__PURE__ */ jsx7("h3", { className: "font-bold text-lg", style: { color: "var(--text-panel)" }, children: "Bug Fixes" }),
+                /* @__PURE__ */ jsxs6("ul", { className: "list-disc list-inside space-y-2 mt-2 text-sm", children: [
+                  /* @__PURE__ */ jsx7("li", { children: "Addressed several critical bugs related to the new bitboard engine to ensure all win conditions are detected correctly and fairly." }),
+                  /* @__PURE__ */ jsx7("li", { children: "Numerous minor stability and performance improvements." })
+                ] })
+              ] }),
+              /* @__PURE__ */ jsx7("p", { className: "pt-2", children: "Thank you for playing and for all your valuable feedback! We hope you enjoy the new and improved challenge." })
+            ] }),
+            /* @__PURE__ */ jsx7("div", { className: "mt-6", children: /* @__PURE__ */ jsx7(
+              "button",
+              {
+                onClick: onClose,
+                className: "control-button primary-button w-full",
+                children: "Close"
+              }
+            ) }),
+            /* @__PURE__ */ jsx7("style", { children: `
+                    @keyframes fade-in-fast { 
+                        0% { opacity: 0; } 
+                        100% { opacity: 1; } 
+                    }
+                    .animate-fade-in-fast { animation: fade-in-fast 0.2s ease-out; }
+
+                    @keyframes pop-in-modal { 
+                        0% { transform: scale(0.8) translateY(20px); opacity: 0; } 
+                        100% { transform: scale(1) translateY(0); opacity: 1; } 
+                    }
+                    .animate-pop-in-modal { animation: pop-in-modal 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94); }
+                ` })
+          ]
+        }
+      )
+    }
+  );
+};
+var ReleaseNotesModal_default = ReleaseNotesModal;
+
+// components/Controls.tsx
+import { jsx as jsx8, jsxs as jsxs7 } from "react/jsx-runtime";
+var SectionHeader = ({ children }) => /* @__PURE__ */ jsx8("h3", { className: "text-sm font-bold uppercase tracking-wider mb-2 mt-4 first:mt-0 section-header", children });
 var Controls = ({
   gameMode,
   setGameMode,
@@ -2220,7 +2502,8 @@ var Controls = ({
   const [isLabOpen, setIsLabOpen] = useState5(false);
   const fileInputRef = useRef4(null);
   const [activeTab, setActiveTab] = useState5("setup");
-  const appVersion = "1.1.0";
+  const [showReleaseNotesModal, setShowReleaseNotesModal] = useState5(false);
+  const appVersion = "1.1.1";
   const [tempPlayerName, setTempPlayerName] = useState5(playerName);
   const [tempPlayerPiece, setTempPlayerPiece] = useState5(playerPiece);
   const [tempPlayerOName, setTempPlayerOName] = useState5(playerOName);
@@ -2267,32 +2550,32 @@ var Controls = ({
   };
   const showLabControls = gameMode === "pvc" /* PvC */ && isLabUnlocked;
   const allDisabled = isSimulating || isTutorialActive;
-  return /* @__PURE__ */ jsxs6("div", { className: "flex flex-col items-stretch w-11/12 lg:w-full gap-2.5 p-4 rounded-lg component-panel", children: [
-    /* @__PURE__ */ jsx7(SectionHeader, { children: "Actions" }),
-    /* @__PURE__ */ jsx7("button", { onClick: onReset, disabled: allDisabled, className: "control-button primary-button w-full", children: "New Game" }),
-    /* @__PURE__ */ jsxs6("div", { className: "tab-nav mt-4", children: [
-      /* @__PURE__ */ jsx7("button", { className: `tab-button ${activeTab === "setup" ? "active" : ""}`, onClick: () => {
+  return /* @__PURE__ */ jsxs7("div", { className: "flex flex-col items-stretch w-11/12 lg:w-full gap-2.5 p-4 rounded-lg component-panel", children: [
+    /* @__PURE__ */ jsx8(SectionHeader, { children: "Actions" }),
+    /* @__PURE__ */ jsx8("button", { onClick: onReset, disabled: allDisabled, className: "control-button primary-button w-full", children: "New Game" }),
+    /* @__PURE__ */ jsxs7("div", { className: "tab-nav mt-4", children: [
+      /* @__PURE__ */ jsx8("button", { className: `tab-button ${activeTab === "setup" ? "active" : ""}`, onClick: () => {
         onUIClick();
         setActiveTab("setup");
       }, disabled: allDisabled, children: "Setup" }),
-      /* @__PURE__ */ jsx7("button", { className: `tab-button ${activeTab === "profile" ? "active" : ""}`, onClick: () => {
+      /* @__PURE__ */ jsx8("button", { className: `tab-button ${activeTab === "profile" ? "active" : ""}`, onClick: () => {
         onUIClick();
         setActiveTab("profile");
       }, disabled: allDisabled, children: "Profile" }),
-      /* @__PURE__ */ jsx7("button", { className: `tab-button ${activeTab === "options" ? "active" : ""}`, onClick: () => {
+      /* @__PURE__ */ jsx8("button", { className: `tab-button ${activeTab === "options" ? "active" : ""}`, onClick: () => {
         onUIClick();
         setActiveTab("options");
       }, disabled: allDisabled, children: "Options" }),
-      /* @__PURE__ */ jsx7("button", { className: `tab-button ${activeTab === "about" ? "active" : ""}`, onClick: () => {
+      /* @__PURE__ */ jsx8("button", { className: `tab-button ${activeTab === "about" ? "active" : ""}`, onClick: () => {
         onUIClick();
         setActiveTab("about");
       }, disabled: allDisabled, children: "About" })
     ] }),
-    /* @__PURE__ */ jsxs6("div", { className: "tab-content", children: [
-      activeTab === "setup" && /* @__PURE__ */ jsxs6("div", { className: "animate-fade-in-fast", children: [
-        /* @__PURE__ */ jsx7(SectionHeader, { children: "Game Setup" }),
-        /* @__PURE__ */ jsxs6("div", { className: "game-mode-toggle", children: [
-          /* @__PURE__ */ jsx7(
+    /* @__PURE__ */ jsxs7("div", { className: "tab-content", children: [
+      activeTab === "setup" && /* @__PURE__ */ jsxs7("div", { className: "animate-fade-in-fast", children: [
+        /* @__PURE__ */ jsx8(SectionHeader, { children: "Game Setup" }),
+        /* @__PURE__ */ jsxs7("div", { className: "game-mode-toggle", children: [
+          /* @__PURE__ */ jsx8(
             "button",
             {
               onClick: () => setGameMode("pvc" /* PvC */),
@@ -2301,7 +2584,7 @@ var Controls = ({
               children: "vs. AI"
             }
           ),
-          /* @__PURE__ */ jsx7(
+          /* @__PURE__ */ jsx8(
             "button",
             {
               onClick: () => setGameMode("pvp" /* PvP */),
@@ -2310,7 +2593,7 @@ var Controls = ({
               children: "vs. Player"
             }
           ),
-          /* @__PURE__ */ jsx7(
+          /* @__PURE__ */ jsx8(
             "button",
             {
               onClick: () => setGameMode("online" /* Online */),
@@ -2320,10 +2603,10 @@ var Controls = ({
             }
           )
         ] }),
-        gameMode === "pvc" /* PvC */ && /* @__PURE__ */ jsxs6("div", { className: "flex flex-col gap-2 mt-2 pt-2", children: [
-          /* @__PURE__ */ jsxs6("div", { className: "control-row", children: [
-            /* @__PURE__ */ jsx7("label", { htmlFor: "auto-adjust-check", className: "control-label", children: "Auto-Adjust Level:" }),
-            /* @__PURE__ */ jsx7(
+        gameMode === "pvc" /* PvC */ && /* @__PURE__ */ jsxs7("div", { className: "flex flex-col gap-2 mt-2 pt-2", children: [
+          /* @__PURE__ */ jsxs7("div", { className: "control-row", children: [
+            /* @__PURE__ */ jsx8("label", { htmlFor: "auto-adjust-check", className: "control-label", children: "Auto-Adjust Level:" }),
+            /* @__PURE__ */ jsx8(
               "button",
               {
                 id: "auto-adjust-check",
@@ -2332,23 +2615,23 @@ var Controls = ({
                 onClick: onToggleAutoAdjustLevel,
                 disabled: allDisabled,
                 className: `toggle-switch ${autoAdjustLevel ? "active" : ""}`,
-                children: /* @__PURE__ */ jsx7("span", { className: "toggle-switch-handle" })
+                children: /* @__PURE__ */ jsx8("span", { className: "toggle-switch-handle" })
               }
             )
           ] }),
-          /* @__PURE__ */ jsxs6("div", { className: "control-row", children: [
-            /* @__PURE__ */ jsx7("label", { htmlFor: "difficulty-level", className: "control-label", children: "Level:" }),
-            /* @__PURE__ */ jsxs6("select", { id: "difficulty-level", value: adaptiveLevel, onChange: (e) => onSetAdaptiveLevel(parseInt(e.target.value, 10)), disabled: allDisabled || autoAdjustLevel, className: "control-select", children: [
-              /* @__PURE__ */ jsx7("option", { value: 0, children: "Beginner" }),
-              /* @__PURE__ */ jsx7("option", { value: 1, children: "Novice" }),
-              /* @__PURE__ */ jsx7("option", { value: 2, children: "Intermediate" }),
-              /* @__PURE__ */ jsx7("option", { value: 3, children: "Expert" }),
-              /* @__PURE__ */ jsx7("option", { value: 4, children: "Master" }),
-              /* @__PURE__ */ jsx7("option", { value: 5, children: "Grand Master" })
+          /* @__PURE__ */ jsxs7("div", { className: "control-row", children: [
+            /* @__PURE__ */ jsx8("label", { htmlFor: "difficulty-level", className: "control-label", children: "Level:" }),
+            /* @__PURE__ */ jsxs7("select", { id: "difficulty-level", value: adaptiveLevel, onChange: (e) => onSetAdaptiveLevel(parseInt(e.target.value, 10)), disabled: allDisabled || autoAdjustLevel, className: "control-select", children: [
+              /* @__PURE__ */ jsx8("option", { value: 0, children: "Beginner" }),
+              /* @__PURE__ */ jsx8("option", { value: 1, children: "Novice" }),
+              /* @__PURE__ */ jsx8("option", { value: 2, children: "Intermediate" }),
+              /* @__PURE__ */ jsx8("option", { value: 3, children: "Expert" }),
+              /* @__PURE__ */ jsx8("option", { value: 4, children: "Master" }),
+              /* @__PURE__ */ jsx8("option", { value: 5, children: "Grand Master" })
             ] })
           ] })
         ] }),
-        gameMode === "online" /* Online */ && /* @__PURE__ */ jsx7(
+        gameMode === "online" /* Online */ && /* @__PURE__ */ jsx8(
           OnlineControls_default,
           {
             onlineRole,
@@ -2362,13 +2645,13 @@ var Controls = ({
           }
         )
       ] }),
-      activeTab === "profile" && /* @__PURE__ */ jsxs6("div", { className: "animate-fade-in-fast", children: [
-        /* @__PURE__ */ jsx7(SectionHeader, { children: "Personalization" }),
-        /* @__PURE__ */ jsxs6("div", { className: "flex flex-col gap-2", children: [
-          /* @__PURE__ */ jsx7("h4", { className: "font-semibold text-center -mb-1", style: { color: "var(--text-panel)" }, children: gameMode === "pvp" /* PvP */ ? "Player 1 (X)" : "Your Profile" }),
-          /* @__PURE__ */ jsxs6("div", { className: "control-row", children: [
-            /* @__PURE__ */ jsx7("label", { htmlFor: "player-name-input", className: "control-label flex-shrink-0", children: "Name:" }),
-            /* @__PURE__ */ jsx7(
+      activeTab === "profile" && /* @__PURE__ */ jsxs7("div", { className: "animate-fade-in-fast", children: [
+        /* @__PURE__ */ jsx8(SectionHeader, { children: "Personalization" }),
+        /* @__PURE__ */ jsxs7("div", { className: "flex flex-col gap-2", children: [
+          /* @__PURE__ */ jsx8("h4", { className: "font-semibold text-center -mb-1", style: { color: "var(--text-panel)" }, children: gameMode === "pvp" /* PvP */ ? "Player 1 (X)" : "Your Profile" }),
+          /* @__PURE__ */ jsxs7("div", { className: "control-row", children: [
+            /* @__PURE__ */ jsx8("label", { htmlFor: "player-name-input", className: "control-label flex-shrink-0", children: "Name:" }),
+            /* @__PURE__ */ jsx8(
               "input",
               {
                 id: "player-name-input",
@@ -2381,9 +2664,9 @@ var Controls = ({
               }
             )
           ] }),
-          /* @__PURE__ */ jsxs6("div", { className: "control-row", children: [
-            /* @__PURE__ */ jsx7("label", { htmlFor: "player-piece-input", className: "control-label", children: "Piece:" }),
-            /* @__PURE__ */ jsx7(
+          /* @__PURE__ */ jsxs7("div", { className: "control-row", children: [
+            /* @__PURE__ */ jsx8("label", { htmlFor: "player-piece-input", className: "control-label", children: "Piece:" }),
+            /* @__PURE__ */ jsx8(
               "input",
               {
                 id: "player-piece-input",
@@ -2398,11 +2681,11 @@ var Controls = ({
             )
           ] })
         ] }),
-        gameMode === "pvp" /* PvP */ && /* @__PURE__ */ jsxs6("div", { className: "flex flex-col gap-2 mt-4 pt-4 border-t lab-section", children: [
-          /* @__PURE__ */ jsx7("h4", { className: "font-semibold text-center -mb-1", style: { color: "var(--text-panel)" }, children: "Player 2 (O)" }),
-          /* @__PURE__ */ jsxs6("div", { className: "control-row", children: [
-            /* @__PURE__ */ jsx7("label", { htmlFor: "player-o-name-input", className: "control-label flex-shrink-0", children: "Name:" }),
-            /* @__PURE__ */ jsx7(
+        gameMode === "pvp" /* PvP */ && /* @__PURE__ */ jsxs7("div", { className: "flex flex-col gap-2 mt-4 pt-4 border-t lab-section", children: [
+          /* @__PURE__ */ jsx8("h4", { className: "font-semibold text-center -mb-1", style: { color: "var(--text-panel)" }, children: "Player 2 (O)" }),
+          /* @__PURE__ */ jsxs7("div", { className: "control-row", children: [
+            /* @__PURE__ */ jsx8("label", { htmlFor: "player-o-name-input", className: "control-label flex-shrink-0", children: "Name:" }),
+            /* @__PURE__ */ jsx8(
               "input",
               {
                 id: "player-o-name-input",
@@ -2415,9 +2698,9 @@ var Controls = ({
               }
             )
           ] }),
-          /* @__PURE__ */ jsxs6("div", { className: "control-row", children: [
-            /* @__PURE__ */ jsx7("label", { htmlFor: "player-o-piece-input", className: "control-label", children: "Piece:" }),
-            /* @__PURE__ */ jsx7(
+          /* @__PURE__ */ jsxs7("div", { className: "control-row", children: [
+            /* @__PURE__ */ jsx8("label", { htmlFor: "player-o-piece-input", className: "control-label", children: "Piece:" }),
+            /* @__PURE__ */ jsx8(
               "input",
               {
                 id: "player-o-piece-input",
@@ -2432,16 +2715,16 @@ var Controls = ({
             )
           ] })
         ] }),
-        /* @__PURE__ */ jsxs6("div", { className: "mt-4 flex items-center justify-end gap-2", children: [
-          isSaved && /* @__PURE__ */ jsx7("span", { className: "text-sm animate-fade-in-fast", style: { color: "var(--toggle-active-bg)" }, children: "Saved!" }),
-          /* @__PURE__ */ jsx7("button", { onClick: handleApplyChanges, disabled: allDisabled || !hasChanges, className: "control-button primary-button", children: "Apply" })
+        /* @__PURE__ */ jsxs7("div", { className: "mt-4 flex items-center justify-end gap-2", children: [
+          isSaved && /* @__PURE__ */ jsx8("span", { className: "text-sm animate-fade-in-fast", style: { color: "var(--toggle-active-bg)" }, children: "Saved!" }),
+          /* @__PURE__ */ jsx8("button", { onClick: handleApplyChanges, disabled: allDisabled || !hasChanges, className: "control-button primary-button", children: "Apply" })
         ] })
       ] }),
-      activeTab === "options" && /* @__PURE__ */ jsxs6("div", { className: "animate-fade-in-fast", children: [
-        /* @__PURE__ */ jsx7(SectionHeader, { children: "Preferences" }),
-        /* @__PURE__ */ jsxs6("div", { className: "control-row", children: [
-          /* @__PURE__ */ jsx7("label", { htmlFor: "enable-animations-check", className: "control-label", children: "Animations:" }),
-          /* @__PURE__ */ jsx7(
+      activeTab === "options" && /* @__PURE__ */ jsxs7("div", { className: "animate-fade-in-fast", children: [
+        /* @__PURE__ */ jsx8(SectionHeader, { children: "Preferences" }),
+        /* @__PURE__ */ jsxs7("div", { className: "control-row", children: [
+          /* @__PURE__ */ jsx8("label", { htmlFor: "enable-animations-check", className: "control-label", children: "Animations:" }),
+          /* @__PURE__ */ jsx8(
             "button",
             {
               id: "enable-animations-check",
@@ -2450,13 +2733,13 @@ var Controls = ({
               onClick: onToggleAnimation,
               disabled: allDisabled,
               className: `toggle-switch ${isAnimationEnabled ? "active" : ""}`,
-              children: /* @__PURE__ */ jsx7("span", { className: "toggle-switch-handle" })
+              children: /* @__PURE__ */ jsx8("span", { className: "toggle-switch-handle" })
             }
           )
         ] }),
-        "vibrate" in navigator && /* @__PURE__ */ jsxs6("div", { className: "control-row", children: [
-          /* @__PURE__ */ jsx7("label", { htmlFor: "enable-haptics-check", className: "control-label", children: "Vibrations:" }),
-          /* @__PURE__ */ jsx7(
+        "vibrate" in navigator && /* @__PURE__ */ jsxs7("div", { className: "control-row", children: [
+          /* @__PURE__ */ jsx8("label", { htmlFor: "enable-haptics-check", className: "control-label", children: "Vibrations:" }),
+          /* @__PURE__ */ jsx8(
             "button",
             {
               id: "enable-haptics-check",
@@ -2465,13 +2748,13 @@ var Controls = ({
               onClick: onToggleHapticEnabled,
               disabled: allDisabled,
               className: `toggle-switch ${isHapticEnabled ? "active" : ""}`,
-              children: /* @__PURE__ */ jsx7("span", { className: "toggle-switch-handle" })
+              children: /* @__PURE__ */ jsx8("span", { className: "toggle-switch-handle" })
             }
           )
         ] }),
-        /* @__PURE__ */ jsxs6("div", { className: "control-row", children: [
-          /* @__PURE__ */ jsx7("label", { htmlFor: "theme-switcher", className: "control-label", children: "Theme:" }),
-          /* @__PURE__ */ jsx7(
+        /* @__PURE__ */ jsxs7("div", { className: "control-row", children: [
+          /* @__PURE__ */ jsx8("label", { htmlFor: "theme-switcher", className: "control-label", children: "Theme:" }),
+          /* @__PURE__ */ jsx8(
             "button",
             {
               id: "theme-switcher",
@@ -2483,65 +2766,65 @@ var Controls = ({
           )
         ] })
       ] }),
-      activeTab === "about" && /* @__PURE__ */ jsxs6("div", { className: "animate-fade-in-fast text-sm", children: [
-        /* @__PURE__ */ jsx7(SectionHeader, { children: "Join the Community" }),
-        /* @__PURE__ */ jsxs6("div", { className: "flex flex-col gap-2.5", children: [
-          /* @__PURE__ */ jsx7("a", { href: "https://sengle.itch.io/caz-connect", target: "_blank", rel: "noopener noreferrer", className: "control-button secondary-button text-center", children: "Support on Itch.io" }),
-          /* @__PURE__ */ jsx7("a", { href: "https://discord.gg/uAm43yApGY", target: "_blank", rel: "noopener noreferrer", className: "control-button secondary-button text-center", children: "Join our Discord" })
+      activeTab === "about" && /* @__PURE__ */ jsxs7("div", { className: "animate-fade-in-fast text-sm", children: [
+        /* @__PURE__ */ jsx8(SectionHeader, { children: "Join the Community" }),
+        /* @__PURE__ */ jsxs7("div", { className: "flex flex-col gap-2.5", children: [
+          /* @__PURE__ */ jsx8("a", { href: "https://sengle.itch.io/caz-connect", target: "_blank", rel: "noopener noreferrer", className: "control-button secondary-button text-center", children: "Support on Itch.io" }),
+          /* @__PURE__ */ jsx8("a", { href: "https://discord.gg/uAm43yApGY", target: "_blank", rel: "noopener noreferrer", className: "control-button secondary-button text-center", children: "Join our Discord" })
         ] }),
-        /* @__PURE__ */ jsx7(SectionHeader, { children: "Think You Know Connect-Four? Think Again." }),
-        /* @__PURE__ */ jsxs6("p", { className: "mb-2", children: [
+        /* @__PURE__ */ jsx8(SectionHeader, { children: "Think You Know Connect-Four? Think Again." }),
+        /* @__PURE__ */ jsxs7("p", { className: "mb-2", children: [
           'Deep in the halls of Cazenovia High, during an ordinary AP Science class, a new game was born. A few bored geeks took a classic concept and asked a simple question: what if you could only play on the edges? The result was "8 by 8", a strategic challenge that will change the way you think about connecting four. Years later, former student ',
-          /* @__PURE__ */ jsx7("strong", { children: "IJuan" }),
+          /* @__PURE__ */ jsx8("strong", { children: "IJuan" }),
           " rediscovered the rules and brought the game to the digital world for all to enjoy as ",
-          /* @__PURE__ */ jsx7("strong", { children: "Caz Connect" }),
+          /* @__PURE__ */ jsx8("strong", { children: "Caz Connect" }),
           "."
         ] }),
-        /* @__PURE__ */ jsxs6("p", { className: "mb-4", children: [
+        /* @__PURE__ */ jsxs7("p", { className: "mb-4", children: [
           "Meet your host, ",
-          /* @__PURE__ */ jsx7("strong", { children: "Professor Caz" }),
+          /* @__PURE__ */ jsx8("strong", { children: "Professor Caz" }),
           ', the wise owl who has perfected this unique game of "four-way gravity." In his world, every piece must be supported. Your journey begins on the outer walls of the 8x8 grid. From there, you must build solid, unbroken lines of your pieces\u2014we call them "gravity bridges"\u2014to venture into the center of the board.'
         ] }),
-        /* @__PURE__ */ jsx7("p", { className: "mb-4", children: "Block your opponent, plan your bridges, and use the walls to your advantage to connect four of your pieces in any direction. With a highly intelligent AI featuring adjustable difficulty levels (from a friendly newcomer to a strategic expert) and a polished local multiplayer mode (and a beta online multiplayer mode), there's always a new challenge waiting." }),
-        /* @__PURE__ */ jsx7("p", { className: "mb-4", children: "Developed from a simple idea into a full-featured game, Caz Connect includes:" }),
-        /* @__PURE__ */ jsxs6("ul", { className: "list-disc list-inside space-y-2 mb-4", children: [
-          /* @__PURE__ */ jsxs6("li", { children: [
-            /* @__PURE__ */ jsx7("strong", { children: "A Whole New Spin on a Classic:" }),
+        /* @__PURE__ */ jsx8("p", { className: "mb-4", children: "Block your opponent, plan your bridges, and use the walls to your advantage to connect four of your pieces in any direction. With a highly intelligent AI featuring adjustable difficulty levels (from a friendly newcomer to a strategic expert) and a polished local multiplayer mode (and a beta online multiplayer mode), there's always a new challenge waiting." }),
+        /* @__PURE__ */ jsx8("p", { className: "mb-4", children: "Developed from a simple idea into a full-featured game, Caz Connect includes:" }),
+        /* @__PURE__ */ jsxs7("ul", { className: "list-disc list-inside space-y-2 mb-4", children: [
+          /* @__PURE__ */ jsxs7("li", { children: [
+            /* @__PURE__ */ jsx8("strong", { children: "A Whole New Spin on a Classic:" }),
             ` The "Gravity Connection" rule changes everything! You can only place a piece if it has an unbroken line of other pieces connecting it to an outer wall. It's a simple concept with deep strategic complexity that will challenge you on every move.`
           ] }),
-          /* @__PURE__ */ jsxs6("li", { children: [
-            /* @__PURE__ */ jsx7("strong", { children: "Challenge the Eccentric Professor Caz:" }),
+          /* @__PURE__ */ jsxs7("li", { children: [
+            /* @__PURE__ */ jsx8("strong", { children: "Challenge the Eccentric Professor Caz:" }),
             ' Face off against the legendary professor! Our advanced AI features multiple difficulty levels, from "Beginner" to the truly formidable "Grand Master." But be warned\u2014he learns.'
           ] }),
-          /* @__PURE__ */ jsxs6("li", { children: [
-            /* @__PURE__ */ jsx7("strong", { children: "Unlock the Professor's Secret Lab:" }),
+          /* @__PURE__ */ jsxs7("li", { children: [
+            /* @__PURE__ */ jsx8("strong", { children: "Unlock the Professor's Secret Lab:" }),
             ` Prove your genius to gain access to the professor's inner sanctum. Here, you can train the AI through game simulations, import and export its "brain," and enable its advanced learning mode to create the ultimate opponent.`
           ] }),
-          /* @__PURE__ */ jsxs6("li", { children: [
-            /* @__PURE__ */ jsx7("strong", { children: "Multiple Ways to Play:" }),
+          /* @__PURE__ */ jsxs7("li", { children: [
+            /* @__PURE__ */ jsx8("strong", { children: "Multiple Ways to Play:" }),
             " Go head-to-head with friends in local Player-vs-Player mode, take on the ever-improving AI, or share simple game codes for turn-based asynchronous online matches."
           ] }),
-          /* @__PURE__ */ jsxs6("li", { children: [
-            /* @__PURE__ */ jsx7("strong", { children: "Personalize Your Game:" }),
+          /* @__PURE__ */ jsxs7("li", { children: [
+            /* @__PURE__ */ jsx8("strong", { children: "Personalize Your Game:" }),
             ' Choose your aesthetic\u2014the quirky chalk-and-notebook "Science" theme or the sleek, futuristic "Cosmic" theme. Customize your player name and piece to make your mark!'
           ] }),
-          /* @__PURE__ */ jsxs6("li", { children: [
-            /* @__PURE__ */ jsx7("strong", { children: "Unlock Achievements & Track Your Stats:" }),
+          /* @__PURE__ */ jsxs7("li", { children: [
+            /* @__PURE__ */ jsx8("strong", { children: "Unlock Achievements & Track Your Stats:" }),
             " From your very first victory to the monumental feat of defeating the Grand Master, earn dozens of achievements and track your career stats to prove your intellectual dominance."
           ] }),
-          /* @__PURE__ */ jsxs6("li", { children: [
-            /* @__PURE__ */ jsx7("strong", { children: "Installable & Offline-Ready:" }),
+          /* @__PURE__ */ jsxs7("li", { children: [
+            /* @__PURE__ */ jsx8("strong", { children: "Installable & Offline-Ready:" }),
             " As a Progressive Web App (PWA), you can install Caz Connect directly to your home screen for a full-screen, offline-ready experience anytime, anywhere."
           ] })
         ] }),
-        /* @__PURE__ */ jsxs6("p", { className: "text-center text-xs opacity-60 mt-6", children: [
+        /* @__PURE__ */ jsxs7("button", { onClick: () => setShowReleaseNotesModal(true), className: "text-center text-xs opacity-60 mt-6 hover:opacity-100 transition-opacity", children: [
           "Version: ",
           appVersion
         ] })
       ] })
     ] }),
-    showLabControls && /* @__PURE__ */ jsxs6("div", { className: "flex flex-col gap-2.5 w-full mt-4 pt-4 border-t lab-section", children: [
-      /* @__PURE__ */ jsxs6(
+    showLabControls && /* @__PURE__ */ jsxs7("div", { className: "flex flex-col gap-2.5 w-full mt-4 pt-4 border-t lab-section", children: [
+      /* @__PURE__ */ jsxs7(
         "button",
         {
           onClick: () => {
@@ -2551,15 +2834,15 @@ var Controls = ({
           disabled: allDisabled,
           className: "flex items-center justify-between w-full text-left disabled:opacity-50",
           children: [
-            /* @__PURE__ */ jsx7("span", { className: "text-sm font-bold uppercase tracking-wider section-header", children: "Professor's Lab" }),
-            /* @__PURE__ */ jsx7("svg", { className: `w-5 h-5 transition-transform duration-200 lab-arrow ${isLabOpen ? "transform rotate-180" : ""}`, fill: "none", stroke: "currentColor", viewBox: "0 0 24 24", xmlns: "http://www.w3.org/2000/svg", children: /* @__PURE__ */ jsx7("path", { strokeLinecap: "round", strokeLinejoin: "round", strokeWidth: "2", d: "M19 9l-7 7-7-7" }) })
+            /* @__PURE__ */ jsx8("span", { className: "text-sm font-bold uppercase tracking-wider section-header", children: "Professor's Lab" }),
+            /* @__PURE__ */ jsx8("svg", { className: `w-5 h-5 transition-transform duration-200 lab-arrow ${isLabOpen ? "transform rotate-180" : ""}`, fill: "none", stroke: "currentColor", viewBox: "0 0 24 24", xmlns: "http://www.w3.org/2000/svg", children: /* @__PURE__ */ jsx8("path", { strokeLinecap: "round", strokeLinejoin: "round", strokeWidth: "2", d: "M19 9l-7 7-7-7" }) })
           ]
         }
       ),
-      isLabOpen && /* @__PURE__ */ jsxs6("div", { className: "flex flex-col gap-2.5 w-full mt-2 animate-fade-in", children: [
-        /* @__PURE__ */ jsxs6("div", { className: "control-row", children: [
-          /* @__PURE__ */ jsx7("label", { htmlFor: "ai-learning-check", className: "control-label", title: "Allow AI to save game results to its memory on higher difficulties.", children: "Allow AI to Learn:" }),
-          /* @__PURE__ */ jsx7(
+      isLabOpen && /* @__PURE__ */ jsxs7("div", { className: "flex flex-col gap-2.5 w-full mt-2 animate-fade-in", children: [
+        /* @__PURE__ */ jsxs7("div", { className: "control-row", children: [
+          /* @__PURE__ */ jsx8("label", { htmlFor: "ai-learning-check", className: "control-label", title: "Allow AI to save game results to its memory on higher difficulties.", children: "Allow AI to Learn:" }),
+          /* @__PURE__ */ jsx8(
             "button",
             {
               id: "ai-learning-check",
@@ -2568,13 +2851,13 @@ var Controls = ({
               onClick: onToggleAiLearning,
               disabled: allDisabled,
               className: `toggle-switch ${isAiLearningEnabled ? "active" : ""}`,
-              children: /* @__PURE__ */ jsx7("span", { className: "toggle-switch-handle" })
+              children: /* @__PURE__ */ jsx8("span", { className: "toggle-switch-handle" })
             }
           )
         ] }),
-        /* @__PURE__ */ jsxs6("div", { className: "control-row", children: [
-          /* @__PURE__ */ jsx7("label", { htmlFor: "sim-games-input", className: "control-label", children: "Simulate Games:" }),
-          /* @__PURE__ */ jsx7(
+        /* @__PURE__ */ jsxs7("div", { className: "control-row", children: [
+          /* @__PURE__ */ jsx8("label", { htmlFor: "sim-games-input", className: "control-label", children: "Simulate Games:" }),
+          /* @__PURE__ */ jsx8(
             "input",
             {
               type: "number",
@@ -2588,15 +2871,16 @@ var Controls = ({
             }
           )
         ] }),
-        !isSimulating ? /* @__PURE__ */ jsx7("button", { onClick: () => onStartSimulation(simGames), disabled: isTutorialActive, className: "control-button secondary-button bg-green-500 text-white", children: "Start AI Training" }) : /* @__PURE__ */ jsx7("button", { onClick: onStopSimulation, className: "control-button primary-button", children: "Stop Training" }),
-        /* @__PURE__ */ jsxs6("div", { className: "flex gap-2.5", children: [
-          /* @__PURE__ */ jsx7("button", { onClick: handleImportClick, disabled: allDisabled, className: "control-button secondary-button flex-grow", children: "Import AI" }),
-          /* @__PURE__ */ jsx7("button", { onClick: onExportMemory, disabled: allDisabled, className: "control-button secondary-button flex-grow", children: "Export AI" })
+        !isSimulating ? /* @__PURE__ */ jsx8("button", { onClick: () => onStartSimulation(simGames), disabled: isTutorialActive, className: "control-button secondary-button bg-green-500 text-white", children: "Start AI Training" }) : /* @__PURE__ */ jsx8("button", { onClick: onStopSimulation, className: "control-button primary-button", children: "Stop Training" }),
+        /* @__PURE__ */ jsxs7("div", { className: "flex gap-2.5", children: [
+          /* @__PURE__ */ jsx8("button", { onClick: handleImportClick, disabled: allDisabled, className: "control-button secondary-button flex-grow", children: "Import AI" }),
+          /* @__PURE__ */ jsx8("button", { onClick: onExportMemory, disabled: allDisabled, className: "control-button secondary-button flex-grow", children: "Export AI" })
         ] }),
-        /* @__PURE__ */ jsx7("input", { type: "file", ref: fileInputRef, onChange: handleFileChange, accept: ".json", className: "hidden" })
+        /* @__PURE__ */ jsx8("input", { type: "file", ref: fileInputRef, onChange: handleFileChange, accept: ".json", className: "hidden" })
       ] })
     ] }),
-    /* @__PURE__ */ jsx7("style", { children: `
+    showReleaseNotesModal && /* @__PURE__ */ jsx8(ReleaseNotesModal_default, { onClose: () => setShowReleaseNotesModal(false) }),
+    /* @__PURE__ */ jsx8("style", { children: `
                 @keyframes fade-in { 
                     0% { opacity: 0; transform: translateY(-10px); } 
                     100% { opacity: 1; transform: translateY(0); } 
@@ -2614,36 +2898,36 @@ var Controls = ({
 var Controls_default = Controls;
 
 // components/InstallPrompt.tsx
-import { jsx as jsx8, jsxs as jsxs7 } from "react/jsx-runtime";
+import { jsx as jsx9, jsxs as jsxs8 } from "react/jsx-runtime";
 var InstallPrompt = ({ onInstall, onDismiss }) => {
-  return /* @__PURE__ */ jsx8("div", { className: "fixed bottom-0 left-0 right-0 p-4 z-50 transform translate-y-0 transition-transform duration-300 ease-in-out prompt-panel", children: /* @__PURE__ */ jsxs7("div", { className: "max-w-xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4 text-center sm:text-left", children: [
-    /* @__PURE__ */ jsxs7("div", { className: "flex-grow", children: [
-      /* @__PURE__ */ jsx8("h3", { className: "m-0 mb-1 text-lg font-semibold", children: "Install Caz Connect" }),
-      /* @__PURE__ */ jsx8("p", { className: "m-0 text-sm leading-snug", children: "Add to your Home Screen for a full-screen, offline experience!" })
+  return /* @__PURE__ */ jsx9("div", { className: "fixed bottom-0 left-0 right-0 p-4 z-50 transform translate-y-0 transition-transform duration-300 ease-in-out prompt-panel", children: /* @__PURE__ */ jsxs8("div", { className: "max-w-xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4 text-center sm:text-left", children: [
+    /* @__PURE__ */ jsxs8("div", { className: "flex-grow", children: [
+      /* @__PURE__ */ jsx9("h3", { className: "m-0 mb-1 text-lg font-semibold", children: "Install Caz Connect" }),
+      /* @__PURE__ */ jsx9("p", { className: "m-0 text-sm leading-snug", children: "Add to your Home Screen for a full-screen, offline experience!" })
     ] }),
-    /* @__PURE__ */ jsxs7("div", { className: "flex gap-2.5 flex-shrink-0", children: [
-      /* @__PURE__ */ jsx8("button", { onClick: onInstall, className: "py-2 px-4 font-semibold rounded-lg bg-green-500 text-white", children: "Install" }),
-      /* @__PURE__ */ jsx8("button", { onClick: onDismiss, className: "py-2 px-4 font-semibold rounded-lg bg-slate-400/50 text-slate-800", children: "Later" })
+    /* @__PURE__ */ jsxs8("div", { className: "flex gap-2.5 flex-shrink-0", children: [
+      /* @__PURE__ */ jsx9("button", { onClick: onInstall, className: "py-2 px-4 font-semibold rounded-lg bg-green-500 text-white", children: "Install" }),
+      /* @__PURE__ */ jsx9("button", { onClick: onDismiss, className: "py-2 px-4 font-semibold rounded-lg bg-slate-400/50 text-slate-800", children: "Later" })
     ] })
   ] }) });
 };
 var InstallPrompt_default = InstallPrompt;
 
 // components/TutorialMessage.tsx
-import { jsx as jsx9, jsxs as jsxs8 } from "react/jsx-runtime";
+import { jsx as jsx10, jsxs as jsxs9 } from "react/jsx-runtime";
 var TutorialMessage = ({ text, showNext, onNext, onSkip }) => {
-  return /* @__PURE__ */ jsxs8("div", { className: "fixed bottom-0 left-0 right-0 p-4 z-50 transform translate-y-0 transition-transform duration-300 ease-in-out animate-slide-up prompt-panel", children: [
-    /* @__PURE__ */ jsxs8("div", { className: "max-w-xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4 text-center sm:text-left", children: [
-      /* @__PURE__ */ jsxs8("div", { className: "flex-grow", children: [
-        /* @__PURE__ */ jsx9("h3", { className: "m-0 mb-1 text-lg font-semibold", children: "Professor Caz's Lesson" }),
-        /* @__PURE__ */ jsx9("p", { className: "m-0 text-sm leading-snug", children: text })
+  return /* @__PURE__ */ jsxs9("div", { className: "fixed bottom-0 left-0 right-0 p-4 z-50 transform translate-y-0 transition-transform duration-300 ease-in-out animate-slide-up prompt-panel", children: [
+    /* @__PURE__ */ jsxs9("div", { className: "max-w-xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4 text-center sm:text-left", children: [
+      /* @__PURE__ */ jsxs9("div", { className: "flex-grow", children: [
+        /* @__PURE__ */ jsx10("h3", { className: "m-0 mb-1 text-lg font-semibold", children: "Professor Caz's Lesson" }),
+        /* @__PURE__ */ jsx10("p", { className: "m-0 text-sm leading-snug", children: text })
       ] }),
-      /* @__PURE__ */ jsxs8("div", { className: "flex gap-2.5 flex-shrink-0", children: [
-        showNext && /* @__PURE__ */ jsx9("button", { onClick: onNext, className: "py-2 px-4 font-semibold rounded-lg bg-green-500 text-white", children: "Next" }),
-        /* @__PURE__ */ jsx9("button", { onClick: onSkip, className: "py-2 px-4 font-semibold rounded-lg bg-slate-400/50 text-slate-800", children: "Skip Tutorial" })
+      /* @__PURE__ */ jsxs9("div", { className: "flex gap-2.5 flex-shrink-0", children: [
+        showNext && /* @__PURE__ */ jsx10("button", { onClick: onNext, className: "py-2 px-4 font-semibold rounded-lg bg-green-500 text-white", children: "Next" }),
+        /* @__PURE__ */ jsx10("button", { onClick: onSkip, className: "py-2 px-4 font-semibold rounded-lg bg-slate-400/50 text-slate-800", children: "Skip Tutorial" })
       ] })
     ] }),
-    /* @__PURE__ */ jsx9("style", { children: `
+    /* @__PURE__ */ jsx10("style", { children: `
                 @keyframes slide-up { 
                     0% { transform: translateY(100%); } 
                     100% { transform: translateY(0); } 
@@ -2656,7 +2940,7 @@ var TutorialMessage_default = TutorialMessage;
 
 // components/UnlockModal.tsx
 import { useState as useState6, useEffect as useEffect4 } from "react";
-import { jsx as jsx10, jsxs as jsxs9 } from "react/jsx-runtime";
+import { jsx as jsx11, jsxs as jsxs10 } from "react/jsx-runtime";
 var UnlockModal = ({ onDismiss }) => {
   const [isDismissible, setIsDismissible] = useState6(false);
   useEffect4(() => {
@@ -2670,19 +2954,19 @@ var UnlockModal = ({ onDismiss }) => {
       onDismiss();
     }
   };
-  return /* @__PURE__ */ jsxs9(
+  return /* @__PURE__ */ jsxs10(
     "div",
     {
       className: "fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4 animate-fade-in-fast",
       onClick: handleOverlayClick,
       children: [
-        /* @__PURE__ */ jsxs9(
+        /* @__PURE__ */ jsxs10(
           "div",
           {
             className: "component-panel rounded-lg p-8 max-w-sm w-full text-center relative transform animate-pop-in-modal",
             onClick: (e) => e.stopPropagation(),
             children: [
-              /* @__PURE__ */ jsx10(
+              /* @__PURE__ */ jsx11(
                 "img",
                 {
                   src: "./professor-caz.png",
@@ -2691,9 +2975,9 @@ var UnlockModal = ({ onDismiss }) => {
                   style: { borderColor: "var(--panel-border)" }
                 }
               ),
-              /* @__PURE__ */ jsx10("h2", { className: "text-2xl font-bold title-font", style: { color: "var(--text-header)" }, children: "Professor's Lab Unlocked!" }),
-              /* @__PURE__ */ jsx10("p", { className: "my-4 text-base", children: `"You've gained access to my secret lab! Here you can challenge the ultimate 'Learning' AI and utilize advanced training options. Experiment wisely."` }),
-              /* @__PURE__ */ jsx10(
+              /* @__PURE__ */ jsx11("h2", { className: "text-2xl font-bold title-font", style: { color: "var(--text-header)" }, children: "Professor's Lab Unlocked!" }),
+              /* @__PURE__ */ jsx11("p", { className: "my-4 text-base", children: `"You've gained access to my secret lab! Here you can challenge the ultimate 'Learning' AI and utilize advanced training options. Experiment wisely."` }),
+              /* @__PURE__ */ jsx11(
                 "button",
                 {
                   onClick: onDismiss,
@@ -2704,7 +2988,7 @@ var UnlockModal = ({ onDismiss }) => {
             ]
           }
         ),
-        /* @__PURE__ */ jsx10("style", { children: `
+        /* @__PURE__ */ jsx11("style", { children: `
                 @keyframes fade-in-fast { 
                     0% { opacity: 0; } 
                     100% { opacity: 1; } 
@@ -2725,8 +3009,8 @@ var UnlockModal_default = UnlockModal;
 
 // components/GameOverModal.tsx
 import { useState as useState7, useCallback as useCallback3, useMemo as useMemo3 } from "react";
-import { jsx as jsx11, jsxs as jsxs10 } from "react/jsx-runtime";
-var ShareIcon = ({ className }) => /* @__PURE__ */ jsx11("svg", { xmlns: "http://www.w3.org/2000/svg", viewBox: "0 0 24 24", fill: "currentColor", className, children: /* @__PURE__ */ jsx11("path", { d: "M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92 1.61 0 2.92-1.31 2.92-2.92s-1.31-2.92-2.92-2.92z" }) });
+import { jsx as jsx12, jsxs as jsxs11 } from "react/jsx-runtime";
+var ShareIcon = ({ className }) => /* @__PURE__ */ jsx12("svg", { xmlns: "http://www.w3.org/2000/svg", viewBox: "0 0 24 24", fill: "currentColor", className, children: /* @__PURE__ */ jsx12("path", { d: "M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92 1.61 0 2.92-1.31 2.92-2.92s-1.31-2.92-2.92-2.92z" }) });
 var GameOverModal = ({ board, winInfo, gameMode, onNewGame, onClose, stats, adaptiveLevel, isLabUnlocked, playerName, playerOName, levelChange }) => {
   const winner = winInfo ? board[winInfo[0].r][winInfo[0].c] : null;
   const [copySuccess, setCopySuccess] = useState7(false);
@@ -2832,45 +3116,45 @@ var GameOverModal = ({ board, winInfo, gameMode, onNewGame, onClose, stats, adap
       className: "bg-yellow-100 text-yellow-800 border-yellow-300"
     }
   }[levelChange];
-  return /* @__PURE__ */ jsxs10(
+  return /* @__PURE__ */ jsxs11(
     "div",
     {
       className: "fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4 animate-fade-in-fast",
       onClick: onClose,
       children: [
-        /* @__PURE__ */ jsxs10(
+        /* @__PURE__ */ jsxs11(
           "div",
           {
             className: "component-panel rounded-lg p-6 max-w-md w-full text-center relative transform animate-pop-in-modal max-h-[90vh] overflow-y-auto",
             onClick: (e) => e.stopPropagation(),
             children: [
-              /* @__PURE__ */ jsx11("h2", { className: "text-4xl font-bold title-font mb-2", style: { color: "var(--text-header)" }, children: title }),
-              /* @__PURE__ */ jsx11("div", { className: "mini-board", children: board.map(
+              /* @__PURE__ */ jsx12("h2", { className: "text-4xl font-bold title-font mb-2", style: { color: "var(--text-header)" }, children: title }),
+              /* @__PURE__ */ jsx12("div", { className: "mini-board", children: board.map(
                 (row, r) => row.map((cell, c) => {
                   const isWinning = winPiecesSet.has(`${r}-${c}`);
-                  return /* @__PURE__ */ jsx11("div", { className: `mini-cell ${cell ? `player-${cell.toLowerCase()}` : ""} ${isWinning ? "winning" : ""}` }, `${r}-${c}`);
+                  return /* @__PURE__ */ jsx12("div", { className: `mini-cell ${cell ? `player-${cell.toLowerCase()}` : ""} ${isWinning ? "winning" : ""}` }, `${r}-${c}`);
                 })
               ) }),
-              notification && /* @__PURE__ */ jsxs10("div", { className: `p-3 rounded-lg border text-center font-semibold mb-4 text-base animate-fade-in ${notification.className}`, children: [
-                /* @__PURE__ */ jsx11("span", { className: "mr-2", children: notification.icon }),
+              notification && /* @__PURE__ */ jsxs11("div", { className: `p-3 rounded-lg border text-center font-semibold mb-4 text-base animate-fade-in ${notification.className}`, children: [
+                /* @__PURE__ */ jsx12("span", { className: "mr-2", children: notification.icon }),
                 notification.text
               ] }),
-              gameMode === "pvc" /* PvC */ && /* @__PURE__ */ jsxs10("div", { className: "my-6 text-left", children: [
-                /* @__PURE__ */ jsx11("h3", { className: "text-lg font-bold mb-3 text-center section-header", children: "Player Records vs. AI" }),
-                /* @__PURE__ */ jsx11("div", { className: "space-y-3", children: LEVEL_NAMES.map((levelName, i) => {
+              gameMode === "pvc" /* PvC */ && /* @__PURE__ */ jsxs11("div", { className: "my-6 text-left", children: [
+                /* @__PURE__ */ jsx12("h3", { className: "text-lg font-bold mb-3 text-center section-header", children: "Player Records vs. AI" }),
+                /* @__PURE__ */ jsx12("div", { className: "space-y-3", children: LEVEL_NAMES.map((levelName, i) => {
                   const levelStats = stats[i] || { wins: 0, losses: 0 };
                   const totalGames = levelStats.wins + levelStats.losses;
                   const winPercentage = totalGames > 0 ? Math.round(levelStats.wins / totalGames * 100) : 0;
-                  return /* @__PURE__ */ jsxs10("div", { className: "grid grid-cols-[100px_1fr_80px] items-center gap-2 text-sm", children: [
-                    /* @__PURE__ */ jsx11("span", { className: "font-semibold truncate", children: levelName }),
-                    /* @__PURE__ */ jsxs10("div", { className: "w-full stats-bar-container", children: [
-                      /* @__PURE__ */ jsx11("div", { className: "stats-bar-fill", style: { width: `${winPercentage}%` } }),
-                      totalGames > 0 && /* @__PURE__ */ jsxs10("span", { className: "stats-bar-text", children: [
+                  return /* @__PURE__ */ jsxs11("div", { className: "grid grid-cols-[100px_1fr_80px] items-center gap-2 text-sm", children: [
+                    /* @__PURE__ */ jsx12("span", { className: "font-semibold truncate", children: levelName }),
+                    /* @__PURE__ */ jsxs11("div", { className: "w-full stats-bar-container", children: [
+                      /* @__PURE__ */ jsx12("div", { className: "stats-bar-fill", style: { width: `${winPercentage}%` } }),
+                      totalGames > 0 && /* @__PURE__ */ jsxs11("span", { className: "stats-bar-text", children: [
                         winPercentage,
                         "%"
                       ] })
                     ] }),
-                    /* @__PURE__ */ jsxs10("span", { className: "text-right tabular-nums", children: [
+                    /* @__PURE__ */ jsxs11("span", { className: "text-right tabular-nums", children: [
                       "W:",
                       levelStats.wins,
                       " L:",
@@ -2879,20 +3163,20 @@ var GameOverModal = ({ board, winInfo, gameMode, onNewGame, onClose, stats, adap
                   ] }, levelName);
                 }) })
               ] }),
-              /* @__PURE__ */ jsxs10("div", { className: "flex flex-col gap-2.5 mt-4", children: [
-                /* @__PURE__ */ jsxs10(
+              /* @__PURE__ */ jsxs11("div", { className: "flex flex-col gap-2.5 mt-4", children: [
+                /* @__PURE__ */ jsxs11(
                   "button",
                   {
                     onClick: handleShareGame,
                     className: "control-button secondary-button w-full flex items-center justify-center gap-2",
                     children: [
-                      /* @__PURE__ */ jsx11(ShareIcon, { className: "w-5 h-5" }),
-                      /* @__PURE__ */ jsx11("span", { children: copySuccess ? "Copied!" : "Share Game" })
+                      /* @__PURE__ */ jsx12(ShareIcon, { className: "w-5 h-5" }),
+                      /* @__PURE__ */ jsx12("span", { children: copySuccess ? "Copied!" : "Share Game" })
                     ]
                   }
                 ),
-                /* @__PURE__ */ jsxs10("div", { className: "grid grid-cols-2 gap-2.5", children: [
-                  /* @__PURE__ */ jsx11(
+                /* @__PURE__ */ jsxs11("div", { className: "grid grid-cols-2 gap-2.5", children: [
+                  /* @__PURE__ */ jsx12(
                     "button",
                     {
                       onClick: onClose,
@@ -2900,7 +3184,7 @@ var GameOverModal = ({ board, winInfo, gameMode, onNewGame, onClose, stats, adap
                       children: "View Board"
                     }
                   ),
-                  /* @__PURE__ */ jsx11(
+                  /* @__PURE__ */ jsx12(
                     "button",
                     {
                       onClick: onNewGame,
@@ -2913,7 +3197,7 @@ var GameOverModal = ({ board, winInfo, gameMode, onNewGame, onClose, stats, adap
             ]
           }
         ),
-        /* @__PURE__ */ jsx11("style", { children: `
+        /* @__PURE__ */ jsx12("style", { children: `
                 @keyframes fade-in-fast { 
                     0% { opacity: 0; } 
                     100% { opacity: 1; } 
@@ -2942,37 +3226,37 @@ var GameOverModal = ({ board, winInfo, gameMode, onNewGame, onClose, stats, adap
 var GameOverModal_default = GameOverModal;
 
 // components/RulesModal.tsx
-import { jsx as jsx12, jsxs as jsxs11 } from "react/jsx-runtime";
+import { jsx as jsx13, jsxs as jsxs12 } from "react/jsx-runtime";
 var RulesModal = ({ onClose, onStartTutorial }) => {
-  return /* @__PURE__ */ jsx12(
+  return /* @__PURE__ */ jsx13(
     "div",
     {
       className: "fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4 animate-fade-in-fast",
       onClick: onClose,
-      children: /* @__PURE__ */ jsxs11(
+      children: /* @__PURE__ */ jsxs12(
         "div",
         {
           className: "component-panel rounded-lg p-6 max-w-md w-full text-center relative transform animate-pop-in-modal max-h-[90vh] overflow-y-auto",
           onClick: (e) => e.stopPropagation(),
           children: [
-            /* @__PURE__ */ jsx12("h2", { className: "text-3xl font-bold title-font mb-4", style: { color: "var(--text-header)" }, children: "How to Play" }),
-            /* @__PURE__ */ jsxs11("div", { className: "my-6 text-left space-y-4 text-base", children: [
-              /* @__PURE__ */ jsxs11("div", { children: [
-                /* @__PURE__ */ jsx12("h3", { className: "font-bold text-lg", style: { color: "var(--text-panel)" }, children: /* @__PURE__ */ jsx12("strong", { children: "Objective" }) }),
-                /* @__PURE__ */ jsxs11("p", { children: [
+            /* @__PURE__ */ jsx13("h2", { className: "text-3xl font-bold title-font mb-4", style: { color: "var(--text-header)" }, children: "How to Play" }),
+            /* @__PURE__ */ jsxs12("div", { className: "my-6 text-left space-y-4 text-base", children: [
+              /* @__PURE__ */ jsxs12("div", { children: [
+                /* @__PURE__ */ jsx13("h3", { className: "font-bold text-lg", style: { color: "var(--text-panel)" }, children: /* @__PURE__ */ jsx13("strong", { children: "Objective" }) }),
+                /* @__PURE__ */ jsxs12("p", { children: [
                   "Be the first player to connect ",
-                  /* @__PURE__ */ jsx12("strong", { children: "four or more" }),
+                  /* @__PURE__ */ jsx13("strong", { children: "four or more" }),
                   " of your pieces in a continuous line\u2014horizontally, vertically, or diagonally!"
                 ] })
               ] }),
-              /* @__PURE__ */ jsxs11("div", { children: [
-                /* @__PURE__ */ jsx12("h3", { className: "font-bold text-lg", style: { color: "var(--text-panel)" }, children: /* @__PURE__ */ jsx12("strong", { children: 'The "Gravity Connection" Rule' }) }),
-                /* @__PURE__ */ jsx12("p", { children: "This is the core rule! You can only place a piece in a square that has a straight, unbroken line of pieces connecting it to one of the outer walls." })
+              /* @__PURE__ */ jsxs12("div", { children: [
+                /* @__PURE__ */ jsx13("h3", { className: "font-bold text-lg", style: { color: "var(--text-panel)" }, children: /* @__PURE__ */ jsx13("strong", { children: 'The "Gravity Connection" Rule' }) }),
+                /* @__PURE__ */ jsx13("p", { children: "This is the core rule! You can only place a piece in a square that has a straight, unbroken line of pieces connecting it to one of the outer walls." })
               ] }),
-              /* @__PURE__ */ jsx12("div", { children: /* @__PURE__ */ jsx12("p", { className: "text-sm opacity-80 text-center mt-6", children: "Valid moves are highlighted on the board for the first two AI levels to help you learn." }) })
+              /* @__PURE__ */ jsx13("div", { children: /* @__PURE__ */ jsx13("p", { className: "text-sm opacity-80 text-center mt-6", children: "Valid moves are highlighted on the board for the first two AI levels to help you learn." }) })
             ] }),
-            /* @__PURE__ */ jsxs11("div", { className: "grid grid-cols-2 gap-2.5 mt-4", children: [
-              /* @__PURE__ */ jsx12(
+            /* @__PURE__ */ jsxs12("div", { className: "grid grid-cols-2 gap-2.5 mt-4", children: [
+              /* @__PURE__ */ jsx13(
                 "button",
                 {
                   onClick: onStartTutorial,
@@ -2980,7 +3264,7 @@ var RulesModal = ({ onClose, onStartTutorial }) => {
                   children: "Start Tutorial"
                 }
               ),
-              /* @__PURE__ */ jsx12(
+              /* @__PURE__ */ jsx13(
                 "button",
                 {
                   onClick: onClose,
@@ -2989,7 +3273,7 @@ var RulesModal = ({ onClose, onStartTutorial }) => {
                 }
               )
             ] }),
-            /* @__PURE__ */ jsx12("style", { children: `
+            /* @__PURE__ */ jsx13("style", { children: `
                     @keyframes fade-in-fast { 
                         0% { opacity: 0; } 
                         100% { opacity: 1; } 
@@ -3012,10 +3296,12 @@ var RulesModal_default = RulesModal;
 
 // components/PlayerStatsModal.tsx
 import { useState as useState8, useMemo as useMemo4 } from "react";
-import { jsx as jsx13, jsxs as jsxs12 } from "react/jsx-runtime";
-var CloseIcon = (props) => /* @__PURE__ */ jsx13("svg", { xmlns: "http://www.w3.org/2000/svg", viewBox: "0 0 24 24", fill: "currentColor", ...props, children: /* @__PURE__ */ jsx13("path", { d: "M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" }) });
+import { Fragment, jsx as jsx14, jsxs as jsxs13 } from "react/jsx-runtime";
+var CloseIcon = (props) => /* @__PURE__ */ jsx14("svg", { xmlns: "http://www.w3.org/2000/svg", viewBox: "0 0 24 24", fill: "currentColor", ...props, children: /* @__PURE__ */ jsx14("path", { d: "M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" }) });
+var BackIcon = (props) => /* @__PURE__ */ jsx14("svg", { xmlns: "http://www.w3.org/2000/svg", viewBox: "0 0 24 24", fill: "currentColor", ...props, children: /* @__PURE__ */ jsx14("path", { d: "M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z" }) });
 var PlayerStatsModal = ({ onClose, detailedStats, unlockedAchievements, aiStats, isLabUnlocked }) => {
   const [activeTab, setActiveTab] = useState8("achievements");
+  const [selectedAchievement, setSelectedAchievement] = useState8(null);
   const mostCommonOpening = useMemo4(() => {
     const { openingMoves } = detailedStats;
     if (!openingMoves || Object.keys(openingMoves).length === 0) {
@@ -3029,76 +3315,87 @@ var PlayerStatsModal = ({ onClose, detailedStats, unlockedAchievements, aiStats,
     }
     return Math.round(detailedStats.totalMoves / detailedStats.totalGamesVsAi);
   }, [detailedStats.totalGamesVsAi, detailedStats.totalMoves]);
-  return /* @__PURE__ */ jsx13(
+  const achievementToShow = selectedAchievement ? ACHIEVEMENTS[selectedAchievement] : null;
+  return /* @__PURE__ */ jsx14(
     "div",
     {
       className: "fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4 animate-fade-in-fast",
       onClick: onClose,
-      children: /* @__PURE__ */ jsxs12(
+      children: /* @__PURE__ */ jsxs13(
         "div",
         {
           className: "component-panel rounded-lg p-6 max-w-lg w-full text-center relative transform animate-pop-in-modal max-h-[90vh] flex flex-col",
           onClick: (e) => e.stopPropagation(),
           children: [
-            /* @__PURE__ */ jsx13("button", { onClick: onClose, className: "absolute top-3 right-3 p-1 rounded-full hover:bg-[var(--button-secondary-hover-bg)] transition-colors", "aria-label": "Close", children: /* @__PURE__ */ jsx13(CloseIcon, { className: "w-6 h-6", style: { color: "var(--button-secondary-text)" } }) }),
-            /* @__PURE__ */ jsx13("h2", { className: "text-3xl font-bold title-font mb-4", style: { color: "var(--text-header)" }, children: "Player Stats" }),
-            /* @__PURE__ */ jsxs12("div", { className: "tab-nav -mx-6 px-4", children: [
-              /* @__PURE__ */ jsx13("button", { className: `tab-button ${activeTab === "achievements" ? "active" : ""}`, onClick: () => setActiveTab("achievements"), children: "Achievements" }),
-              /* @__PURE__ */ jsx13("button", { className: `tab-button ${activeTab === "stats" ? "active" : ""}`, onClick: () => setActiveTab("stats"), children: "Statistics" })
-            ] }),
-            /* @__PURE__ */ jsxs12("div", { className: "overflow-y-auto mt-4 pr-2 -mr-2", children: [
-              activeTab === "achievements" && /* @__PURE__ */ jsx13("div", { className: "grid grid-cols-2 sm:grid-cols-3 gap-4 text-center animate-fade-in-fast", children: Object.keys(ACHIEVEMENTS).map((id) => {
+            /* @__PURE__ */ jsx14("button", { onClick: onClose, className: "absolute top-3 right-3 p-1 rounded-full hover:bg-[var(--button-secondary-hover-bg)] transition-colors", "aria-label": "Close", children: /* @__PURE__ */ jsx14(CloseIcon, { className: "w-6 h-6", style: { color: "var(--button-secondary-text)" } }) }),
+            !selectedAchievement ? /* @__PURE__ */ jsx14("h2", { className: "text-3xl font-bold title-font mb-4", style: { color: "var(--text-header)" }, children: "Player Stats" }) : /* @__PURE__ */ jsx14("div", { className: "flex items-center justify-start relative mb-4 h-[44px]", children: /* @__PURE__ */ jsxs13("button", { onClick: () => setSelectedAchievement(null), className: "absolute left-0 top-1/2 -translate-y-1/2 flex items-center gap-1 control-button secondary-button !border-none !px-2 !py-1", "aria-label": "Back to achievements", children: [
+              /* @__PURE__ */ jsx14(BackIcon, { className: "w-6 h-6" }),
+              " Back"
+            ] }) }),
+            !selectedAchievement ? /* @__PURE__ */ jsxs13("div", { className: "tab-nav -mx-6 px-4", children: [
+              /* @__PURE__ */ jsx14("button", { className: `tab-button ${activeTab === "achievements" ? "active" : ""}`, onClick: () => setActiveTab("achievements"), children: "Achievements" }),
+              /* @__PURE__ */ jsx14("button", { className: `tab-button ${activeTab === "stats" ? "active" : ""}`, onClick: () => setActiveTab("stats"), children: "Statistics" })
+            ] }) : /* @__PURE__ */ jsx14("div", { className: "border-b-2", style: { borderColor: "var(--panel-border)" } }),
+            /* @__PURE__ */ jsx14("div", { className: "overflow-y-auto mt-4 pr-2 -mr-2", children: selectedAchievement && achievementToShow ? /* @__PURE__ */ jsxs13("div", { className: "text-center p-4 animate-fade-in-fast flex flex-col items-center gap-4", children: [
+              /* @__PURE__ */ jsx14("span", { className: "text-7xl", children: achievementToShow.icon }),
+              /* @__PURE__ */ jsx14("h3", { className: "text-2xl font-bold title-font", style: { color: "var(--text-header)" }, children: achievementToShow.name }),
+              /* @__PURE__ */ jsx14("p", { className: "text-base", children: achievementToShow.description })
+            ] }) : /* @__PURE__ */ jsxs13(Fragment, { children: [
+              activeTab === "achievements" && /* @__PURE__ */ jsx14("div", { className: "grid grid-cols-2 sm:grid-cols-3 gap-4 text-center animate-fade-in-fast", children: Object.keys(ACHIEVEMENTS).map((id) => {
                 const achievement = ACHIEVEMENTS[id];
                 const isUnlocked = unlockedAchievements.includes(id);
                 const descriptionToShow = isUnlocked ? achievement.description : achievement.lockedDescription || achievement.description;
-                const titleToShow = isUnlocked || !achievement.lockedDescription ? `${achievement.name}
-${descriptionToShow}` : achievement.name;
-                return /* @__PURE__ */ jsxs12(
-                  "div",
+                return /* @__PURE__ */ jsxs13(
+                  "button",
                   {
-                    title: titleToShow,
-                    className: `p-4 rounded-lg flex flex-col items-center justify-start gap-2 transition-all duration-300 ${isUnlocked ? "opacity-100" : "opacity-40 filter grayscale"}`,
+                    onClick: () => {
+                      if (isUnlocked) {
+                        setSelectedAchievement(id);
+                      }
+                    },
+                    className: `p-4 rounded-lg flex flex-col items-center justify-start gap-2 transition-all duration-300 text-left ${isUnlocked ? "opacity-100 cursor-pointer" : "opacity-40 filter grayscale cursor-default"}`,
                     style: { backgroundColor: "rgba(0,0,0,0.05)" },
+                    "aria-label": `View details for ${achievement.name}`,
                     children: [
-                      /* @__PURE__ */ jsx13("span", { className: "text-5xl", children: achievement.icon }),
-                      /* @__PURE__ */ jsx13("h4", { className: "font-bold text-sm m-0 leading-tight", children: achievement.name }),
-                      /* @__PURE__ */ jsx13("p", { className: "text-xs m-0 leading-snug hidden sm:block", children: descriptionToShow })
+                      /* @__PURE__ */ jsx14("span", { className: "text-5xl", children: achievement.icon }),
+                      /* @__PURE__ */ jsx14("h4", { className: "font-bold text-sm m-0 leading-tight text-center w-full", children: achievement.name }),
+                      /* @__PURE__ */ jsx14("p", { className: "text-xs m-0 leading-snug hidden sm:block text-center w-full", children: descriptionToShow })
                     ]
                   },
                   id
                 );
               }) }),
-              activeTab === "stats" && /* @__PURE__ */ jsxs12("div", { className: "text-left animate-fade-in-fast", children: [
-                /* @__PURE__ */ jsx13("h3", { className: "text-lg font-bold mb-3 text-center section-header", children: "Career Stats" }),
-                /* @__PURE__ */ jsxs12("div", { className: "grid grid-cols-3 gap-2 text-center component-panel bg-opacity-10 p-3 rounded-lg border-none shadow-inner", children: [
-                  /* @__PURE__ */ jsxs12("div", { className: "flex flex-col", children: [
-                    /* @__PURE__ */ jsx13("span", { className: "font-bold text-2xl", style: { color: "var(--text-header)" }, children: detailedStats.maxWinStreak }),
-                    /* @__PURE__ */ jsx13("span", { className: "text-xs opacity-80", children: "Max Streak" })
+              activeTab === "stats" && /* @__PURE__ */ jsxs13("div", { className: "text-left animate-fade-in-fast", children: [
+                /* @__PURE__ */ jsx14("h3", { className: "text-lg font-bold mb-3 text-center section-header", children: "Career Stats" }),
+                /* @__PURE__ */ jsxs13("div", { className: "grid grid-cols-3 gap-2 text-center component-panel bg-opacity-10 p-3 rounded-lg border-none shadow-inner", children: [
+                  /* @__PURE__ */ jsxs13("div", { className: "flex flex-col", children: [
+                    /* @__PURE__ */ jsx14("span", { className: "font-bold text-2xl", style: { color: "var(--text-header)" }, children: detailedStats.maxWinStreak }),
+                    /* @__PURE__ */ jsx14("span", { className: "text-xs opacity-80", children: "Max Streak" })
                   ] }),
-                  /* @__PURE__ */ jsxs12("div", { className: "flex flex-col", children: [
-                    /* @__PURE__ */ jsx13("span", { className: "font-bold text-2xl", style: { color: "var(--text-header)" }, children: avgGameLength }),
-                    /* @__PURE__ */ jsx13("span", { className: "text-xs opacity-80", children: "Avg. Moves" })
+                  /* @__PURE__ */ jsxs13("div", { className: "flex flex-col", children: [
+                    /* @__PURE__ */ jsx14("span", { className: "font-bold text-2xl", style: { color: "var(--text-header)" }, children: avgGameLength }),
+                    /* @__PURE__ */ jsx14("span", { className: "text-xs opacity-80", children: "Avg. Moves" })
                   ] }),
-                  /* @__PURE__ */ jsxs12("div", { className: "flex flex-col", children: [
-                    /* @__PURE__ */ jsx13("span", { className: "font-bold text-2xl", style: { color: "var(--text-header)" }, children: mostCommonOpening }),
-                    /* @__PURE__ */ jsx13("span", { className: "text-xs opacity-80", children: "Favorite Start" })
+                  /* @__PURE__ */ jsxs13("div", { className: "flex flex-col", children: [
+                    /* @__PURE__ */ jsx14("span", { className: "font-bold text-2xl", style: { color: "var(--text-header)" }, children: mostCommonOpening }),
+                    /* @__PURE__ */ jsx14("span", { className: "text-xs opacity-80", children: "Favorite Start" })
                   ] })
                 ] }),
-                /* @__PURE__ */ jsx13("h3", { className: "text-lg font-bold my-3 text-center section-header", children: "vs. Professor Caz" }),
-                /* @__PURE__ */ jsx13("div", { className: "space-y-3", children: LEVEL_NAMES.map((levelName, i) => {
+                /* @__PURE__ */ jsx14("h3", { className: "text-lg font-bold my-3 text-center section-header", children: "vs. Professor Caz" }),
+                /* @__PURE__ */ jsx14("div", { className: "space-y-3", children: LEVEL_NAMES.map((levelName, i) => {
                   const levelStats = aiStats[i] || { wins: 0, losses: 0 };
                   const totalGames = levelStats.wins + levelStats.losses;
                   const winPercentage = totalGames > 0 ? Math.round(levelStats.wins / totalGames * 100) : 0;
-                  return /* @__PURE__ */ jsxs12("div", { className: "grid grid-cols-[100px_1fr_80px] items-center gap-2 text-sm", children: [
-                    /* @__PURE__ */ jsx13("span", { className: "font-semibold truncate", children: levelName }),
-                    /* @__PURE__ */ jsxs12("div", { className: "w-full stats-bar-container", children: [
-                      /* @__PURE__ */ jsx13("div", { className: "stats-bar-fill", style: { width: `${winPercentage}%` } }),
-                      totalGames > 0 && /* @__PURE__ */ jsxs12("span", { className: "stats-bar-text", children: [
+                  return /* @__PURE__ */ jsxs13("div", { className: "grid grid-cols-[100px_1fr_80px] items-center gap-2 text-sm", children: [
+                    /* @__PURE__ */ jsx14("span", { className: "font-semibold truncate", children: levelName }),
+                    /* @__PURE__ */ jsxs13("div", { className: "w-full stats-bar-container", children: [
+                      /* @__PURE__ */ jsx14("div", { className: "stats-bar-fill", style: { width: `${winPercentage}%` } }),
+                      totalGames > 0 && /* @__PURE__ */ jsxs13("span", { className: "stats-bar-text", children: [
                         winPercentage,
                         "%"
                       ] })
                     ] }),
-                    /* @__PURE__ */ jsxs12("span", { className: "text-right tabular-nums", children: [
+                    /* @__PURE__ */ jsxs13("span", { className: "text-right tabular-nums", children: [
                       "W:",
                       levelStats.wins,
                       " L:",
@@ -3107,8 +3404,8 @@ ${descriptionToShow}` : achievement.name;
                   ] }, levelName);
                 }) })
               ] })
-            ] }),
-            /* @__PURE__ */ jsx13("style", { children: `
+            ] }) }),
+            /* @__PURE__ */ jsx14("style", { children: `
                     @keyframes fade-in-fast { 
                         0% { opacity: 0; } 
                         100% { opacity: 1; } 
@@ -3129,12 +3426,67 @@ ${descriptionToShow}` : achievement.name;
 };
 var PlayerStatsModal_default = PlayerStatsModal;
 
+// components/ConfirmModal.tsx
+import { jsx as jsx15, jsxs as jsxs14 } from "react/jsx-runtime";
+var ConfirmModal = ({ title, message, confirmText = "Confirm", onConfirm, onCancel }) => {
+  return /* @__PURE__ */ jsx15(
+    "div",
+    {
+      className: "fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4 animate-fade-in-fast",
+      onClick: onCancel,
+      children: /* @__PURE__ */ jsxs14(
+        "div",
+        {
+          className: "component-panel rounded-lg p-6 max-w-sm w-full text-center relative transform animate-pop-in-modal",
+          onClick: (e) => e.stopPropagation(),
+          children: [
+            /* @__PURE__ */ jsx15("h2", { className: "text-2xl font-bold title-font mb-4", style: { color: "var(--text-header)" }, children: title }),
+            /* @__PURE__ */ jsx15("p", { className: "my-6 text-base", children: message }),
+            /* @__PURE__ */ jsxs14("div", { className: "grid grid-cols-2 gap-2.5 mt-4", children: [
+              /* @__PURE__ */ jsx15(
+                "button",
+                {
+                  onClick: onCancel,
+                  className: "control-button secondary-button",
+                  children: "Cancel"
+                }
+              ),
+              /* @__PURE__ */ jsx15(
+                "button",
+                {
+                  onClick: onConfirm,
+                  className: "control-button primary-button",
+                  children: confirmText
+                }
+              )
+            ] }),
+            /* @__PURE__ */ jsx15("style", { children: `
+                    @keyframes fade-in-fast { 
+                        0% { opacity: 0; } 
+                        100% { opacity: 1; } 
+                    }
+                    .animate-fade-in-fast { animation: fade-in-fast 0.2s ease-out; }
+
+                    @keyframes pop-in-modal { 
+                        0% { transform: scale(0.8) translateY(20px); opacity: 0; } 
+                        100% { transform: scale(1) translateY(0); opacity: 1; } 
+                    }
+                    .animate-pop-in-modal { animation: pop-in-modal 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94); }
+                ` })
+          ]
+        }
+      )
+    }
+  );
+};
+var ConfirmModal_default = ConfirmModal;
+
 // App.tsx
-import { jsx as jsx14, jsxs as jsxs13 } from "react/jsx-runtime";
-var VolumeOnIcon = () => /* @__PURE__ */ jsx14("svg", { xmlns: "http://www.w3.org/2000/svg", viewBox: "0 0 24 24", fill: "currentColor", children: /* @__PURE__ */ jsx14("path", { d: "M13.5 4.06c0-1.34-1.61-2.25-2.83-1.46L5.43 6H3a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h2.43l5.24 3.4c1.22.79 2.83-.12 2.83-1.46V4.06zM18.5 12c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM20 12c0 2.76-1.74 5.09-4.01 6.04v-12c2.27.95 4.01 3.27 4.01 5.96z" }) });
-var VolumeOffIcon = () => /* @__PURE__ */ jsx14("svg", { xmlns: "http://www.w3.org/2000/svg", viewBox: "0 0 24 24", fill: "currentColor", children: /* @__PURE__ */ jsx14("path", { d: "M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3a1 1 0 0 0-1 1v4a1 1 0 0 0 1 1h3.73L12 18.27v-5.52l4.51 4.51c-.67.43-1.4.76-2.18.98v2.06a8.99 8.99 0 0 0 3.65-1.49L19.73 21 21 19.73l-9-9L4.27 3zM12 4.06L7.22 7.54 12 12.31V4.06z" }) });
-var QuestionMarkIcon = () => /* @__PURE__ */ jsx14("svg", { xmlns: "http://www.w3.org/2000/svg", viewBox: "0 0 24 24", fill: "currentColor", children: /* @__PURE__ */ jsx14("path", { d: "M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17h-2v-2h2v2zm2.07-7.75l-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H8c0-2.21 1.79-4 4-4s4 1.79 4 4c0 .88-.36 1.68-.93 2.25z" }) });
-var TrophyIcon = () => /* @__PURE__ */ jsx14("svg", { xmlns: "http://www.w3.org/2000/svg", viewBox: "0 0 24 24", fill: "currentColor", children: /* @__PURE__ */ jsx14("path", { d: "M19 5h-2V3H7v2H5c-1.1 0-2 .9-2 2v1c0 2.55 1.92 4.63 4.39 4.94.63 1.5 1.98 2.63 3.61 2.96V19H7v2h10v-2h-4v-3.1c1.63-.33 2.98-1.46 3.61-2.96C19.08 12.63 21 10.55 21 8V7c0-1.1-.9-2-2-2zM5 8V7h2v3.82C5.84 10.4 5 9.3 5 8zm7 6c-1.65 0-3-1.35-3-3V3h6v10c0 1.65-1.35 3-3 3zm7-6c0 1.3-.84 2.4-2 2.82V7h2v1z" }) });
+import { jsx as jsx16, jsxs as jsxs15 } from "react/jsx-runtime";
+var VolumeOnIcon = () => /* @__PURE__ */ jsx16("svg", { xmlns: "http://www.w3.org/2000/svg", viewBox: "0 0 24 24", fill: "currentColor", children: /* @__PURE__ */ jsx16("path", { d: "M13.5 4.06c0-1.34-1.61-2.25-2.83-1.46L5.43 6H3a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h2.43l5.24 3.4c1.22.79 2.83-.12 2.83-1.46V4.06zM18.5 12c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM20 12c0 2.76-1.74 5.09-4.01 6.04v-12c2.27.95 4.01 3.27 4.01 5.96z" }) });
+var VolumeOffIcon = () => /* @__PURE__ */ jsx16("svg", { xmlns: "http://www.w3.org/2000/svg", viewBox: "0 0 24 24", fill: "currentColor", children: /* @__PURE__ */ jsx16("path", { d: "M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3a1 1 0 0 0-1 1v4a1 1 0 0 0 1 1h3.73L12 18.27v-5.52l4.51 4.51c-.67.43-1.4.76-2.18.98v2.06a8.99 8.99 0 0 0 3.65-1.49L19.73 21 21 19.73l-9-9L4.27 3zM12 4.06L7.22 7.54 12 12.31V4.06z" }) });
+var QuestionMarkIcon = () => /* @__PURE__ */ jsx16("svg", { xmlns: "http://www.w3.org/2000/svg", viewBox: "0 0 24 24", fill: "currentColor", children: /* @__PURE__ */ jsx16("path", { d: "M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17h-2v-2h2v2zm2.07-7.75l-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H8c0-2.21 1.79-4 4-4s4 1.79 4 4c0 .88-.36 1.68-.93 2.25z" }) });
+var TrophyIcon = () => /* @__PURE__ */ jsx16("svg", { xmlns: "http://www.w3.org/2000/svg", viewBox: "0 0 24 24", fill: "currentColor", children: /* @__PURE__ */ jsx16("path", { d: "M19 5h-2V3H7v2H5c-1.1 0-2 .9-2 2v1c0 2.55 1.92 4.63 4.39 4.94.63 1.5 1.98 2.63 3.61 2.96V19H7v2h10v-2h-4v-3.1c1.63-.33 2.98-1.46 3.61-2.96C19.08 12.63 21 10.55 21 8V7c0-1.1-.9-2-2-2zM5 8V7h2v3.82C5.84 10.4 5 9.3 5 8zm7 6c-1.65 0-3-1.35-3-3V3h6v10c0 1.65-1.35 3-3 3zm7-6c0 1.3-.84 2.4-2 2.82V7h2v1z" }) });
 var App = () => {
   const {
     board,
@@ -3168,6 +3520,7 @@ var App = () => {
     tutorialHighlight,
     isTutorialInteractive,
     showRulesModal,
+    confirmAction,
     // Personalization
     playerName,
     playerPiece,
@@ -3175,46 +3528,86 @@ var App = () => {
     playerOPiece,
     // Online state
     currentPlayer,
+    movesMade,
     gameOver,
     onlineRole,
     gameStateString,
     actions
   } = useGameLogic();
   const [showPlayerStatsModal, setShowPlayerStatsModal] = useState9(false);
+  const wakeLock = useRef5(null);
   useEffect5(() => {
     document.body.className = `theme-${theme}`;
   }, [theme]);
+  useEffect5(() => {
+    const handleContextMenu = (e) => {
+      e.preventDefault();
+    };
+    document.addEventListener("contextmenu", handleContextMenu);
+    return () => {
+      document.removeEventListener("contextmenu", handleContextMenu);
+    };
+  }, []);
+  useEffect5(() => {
+    const requestWakeLock = async () => {
+      if ("wakeLock" in navigator) {
+        try {
+          wakeLock.current = await navigator.wakeLock.request("screen");
+          wakeLock.current.addEventListener("release", () => {
+            console.log("Wake Lock was released");
+          });
+          console.log("Wake Lock is active");
+        } catch (err) {
+          console.error(`${err.name}, ${err.message}`);
+        }
+      }
+    };
+    const handleVisibilityChange = () => {
+      if (wakeLock.current !== null && document.visibilityState === "visible") {
+        requestWakeLock();
+      }
+    };
+    requestWakeLock();
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      if (wakeLock.current !== null) {
+        wakeLock.current.release();
+        wakeLock.current = null;
+      }
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, []);
   const isBoardDisabled = isThinking || isSimulating || isTutorialActive && !isTutorialInteractive || !!animationInfo;
-  return /* @__PURE__ */ jsxs13("div", { className: "main-container mx-auto p-2.5 flex flex-col items-center gap-5 max-w-lg lg:max-w-6xl lg:grid lg:grid-cols-[minmax(350px,_1fr)_1.5fr] lg:grid-rows-[auto_1fr] lg:[grid-template-areas:'title_game'_'info_game'] lg:items-start lg:gap-10", children: [
-    /* @__PURE__ */ jsxs13("div", { className: "order-1 w-full lg:[grid-area:title]", children: [
-      /* @__PURE__ */ jsx14(
+  return /* @__PURE__ */ jsxs15("div", { className: "main-container mx-auto p-2.5 flex flex-col items-center gap-5 max-w-lg lg:max-w-6xl lg:grid lg:grid-cols-[minmax(350px,_1fr)_1.5fr] lg:grid-rows-[auto_1fr] lg:[grid-template-areas:'title_game'_'info_game'] lg:items-start lg:gap-10", children: [
+    /* @__PURE__ */ jsxs15("div", { className: "order-1 w-full lg:[grid-area:title]", children: [
+      /* @__PURE__ */ jsx16(
         Header_default,
         {
           isThinking: isThinking || isSimulating
         }
       ),
-      /* @__PURE__ */ jsxs13("div", { className: "flex flex-row items-center justify-center gap-4 w-full mt-2", children: [
-        /* @__PURE__ */ jsx14(
+      /* @__PURE__ */ jsxs15("div", { className: "flex flex-row items-center justify-center gap-4 w-full mt-2", children: [
+        /* @__PURE__ */ jsx16(
           "button",
           {
             onClick: actions.toggleMute,
             "aria-label": "Mute sound",
             title: isMuted ? "Unmute" : "Mute",
             className: "w-11 h-11 p-2 rounded-full cursor-pointer flex-shrink-0 header-button",
-            children: isMuted ? /* @__PURE__ */ jsx14(VolumeOffIcon, {}) : /* @__PURE__ */ jsx14(VolumeOnIcon, {})
+            children: isMuted ? /* @__PURE__ */ jsx16(VolumeOffIcon, {}) : /* @__PURE__ */ jsx16(VolumeOnIcon, {})
           }
         ),
-        /* @__PURE__ */ jsx14(
+        /* @__PURE__ */ jsx16(
           "button",
           {
             onClick: actions.openRulesModal,
             "aria-label": "How to Play",
             title: "How to Play",
             className: "w-11 h-11 p-2 rounded-full cursor-pointer flex-shrink-0 header-button",
-            children: /* @__PURE__ */ jsx14(QuestionMarkIcon, {})
+            children: /* @__PURE__ */ jsx16(QuestionMarkIcon, {})
           }
         ),
-        /* @__PURE__ */ jsx14(
+        /* @__PURE__ */ jsx16(
           "button",
           {
             onClick: () => {
@@ -3224,13 +3617,13 @@ var App = () => {
             "aria-label": "Player Stats",
             title: "Player Stats",
             className: "w-11 h-11 p-2 rounded-full cursor-pointer flex-shrink-0 header-button",
-            children: /* @__PURE__ */ jsx14(TrophyIcon, {})
+            children: /* @__PURE__ */ jsx16(TrophyIcon, {})
           }
         )
       ] })
     ] }),
-    /* @__PURE__ */ jsxs13("main", { className: "game-area order-2 flex flex-col items-center w-full lg:min-w-[525px] lg:justify-center lg:[grid-area:game]", children: [
-      /* @__PURE__ */ jsx14(
+    /* @__PURE__ */ jsxs15("main", { className: "game-area order-2 flex flex-col items-center w-full lg:min-w-[525px] lg:justify-center lg:[grid-area:game]", children: [
+      /* @__PURE__ */ jsx16(
         Status_default,
         {
           statusText: gameStatus,
@@ -3245,7 +3638,7 @@ var App = () => {
           gameOver
         }
       ),
-      /* @__PURE__ */ jsx14(
+      /* @__PURE__ */ jsx16(
         Board_default,
         {
           board,
@@ -3264,7 +3657,7 @@ var App = () => {
         }
       )
     ] }),
-    /* @__PURE__ */ jsx14("aside", { className: "info-area order-3 flex flex-col gap-5 w-full items-center lg:justify-start lg:[grid-area:info]", children: /* @__PURE__ */ jsx14(
+    /* @__PURE__ */ jsx16("aside", { className: "info-area order-3 flex flex-col gap-5 w-full items-center lg:justify-start lg:[grid-area:info]", children: /* @__PURE__ */ jsx16(
       Controls_default,
       {
         gameMode,
@@ -3306,7 +3699,7 @@ var App = () => {
         isTutorialActive
       }
     ) }),
-    isTutorialActive && /* @__PURE__ */ jsx14(
+    isTutorialActive && /* @__PURE__ */ jsx16(
       TutorialMessage_default,
       {
         text: tutorialText,
@@ -3315,14 +3708,24 @@ var App = () => {
         onSkip: actions.endTutorial
       }
     ),
-    installPrompt.visible && !isTutorialActive && /* @__PURE__ */ jsx14(
+    installPrompt.visible && !isTutorialActive && /* @__PURE__ */ jsx16(
       InstallPrompt_default,
       {
         onInstall: installPrompt.trigger,
         onDismiss: installPrompt.dismiss
       }
     ),
-    showPlayerStatsModal && /* @__PURE__ */ jsx14(
+    confirmAction && confirmAction.isOpen && /* @__PURE__ */ jsx16(
+      ConfirmModal_default,
+      {
+        title: confirmAction.title,
+        message: confirmAction.message,
+        confirmText: confirmAction.confirmText,
+        onConfirm: confirmAction.onConfirm,
+        onCancel: actions.cancelConfirmAction
+      }
+    ),
+    showPlayerStatsModal && /* @__PURE__ */ jsx16(
       PlayerStatsModal_default,
       {
         onClose: () => {
@@ -3335,7 +3738,7 @@ var App = () => {
         isLabUnlocked
       }
     ),
-    showRulesModal && /* @__PURE__ */ jsx14(
+    showRulesModal && /* @__PURE__ */ jsx16(
       RulesModal_default,
       {
         onClose: actions.closeRulesModal,
@@ -3345,8 +3748,8 @@ var App = () => {
         }
       }
     ),
-    showUnlockModal && /* @__PURE__ */ jsx14(UnlockModal_default, { onDismiss: actions.dismissUnlockModal }),
-    showGameOverModal && /* @__PURE__ */ jsx14(
+    showUnlockModal && /* @__PURE__ */ jsx16(UnlockModal_default, { onDismiss: actions.dismissUnlockModal }),
+    showGameOverModal && /* @__PURE__ */ jsx16(
       GameOverModal_default,
       {
         board,
@@ -3367,7 +3770,7 @@ var App = () => {
 var App_default = App;
 
 // index.tsx
-import { jsx as jsx15 } from "react/jsx-runtime";
+import { jsx as jsx17 } from "react/jsx-runtime";
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
     navigator.serviceWorker.register("./sw.js").then((registration) => {
@@ -3383,5 +3786,5 @@ if (!rootElement) {
 }
 var root = ReactDOM.createRoot(rootElement);
 root.render(
-  /* @__PURE__ */ jsx15(React9.StrictMode, { children: /* @__PURE__ */ jsx15(App_default, {}) })
+  /* @__PURE__ */ jsx17(React9.StrictMode, { children: /* @__PURE__ */ jsx17(App_default, {}) })
 );
