@@ -1208,7 +1208,7 @@ var useGameLogic = () => {
     setNextStarter(PLAYER_O);
   }, [masterReset, playSound]);
   const gameStateString = useMemo(() => {
-    if (gameMode !== "online" /* Online */) return "";
+    if (gameMode !== "online" /* Online */ || movesMade === 0) return "";
     try {
       const state = {
         moveHistory,
@@ -1221,7 +1221,7 @@ var useGameLogic = () => {
       console.error("Failed to serialize game state:", e);
       return "";
     }
-  }, [moveHistory, gameMode, playerName, playerPiece, playerOName, playerOPiece]);
+  }, [moveHistory, gameMode, playerName, playerPiece, playerOName, playerOPiece, movesMade]);
   const loadOnlineGame = useCallback((stateStr) => {
     if (!stateStr) return false;
     playSound("uiclick");
@@ -1316,7 +1316,7 @@ var useGameLogic = () => {
     }
     return score;
   };
-  const minimax = (currentBoard, currentMovesMade, depth, alpha, beta, maximizingPlayer, scoringFunction, moveHistory2, memory, transpositionTable, moveList = null) => {
+  const minimax = (currentBoard, currentMovesMade, depth, alpha, beta, maximizingPlayer, scoringFunction, moveHistory2, transpositionTable, moveList = null) => {
     const originalAlpha = alpha;
     const boardKey = getCanonicalBoardKey(currentBoard);
     const storedEntry = transpositionTable.get(boardKey);
@@ -1332,11 +1332,6 @@ var useGameLogic = () => {
       if (alpha >= beta) {
         return { score: storedEntry.score, move: storedEntry.move };
       }
-    }
-    if (moveHistory2.length > 0 && memory.wins.length + memory.losses.length > 0) {
-      const canonicalHistory = getCanonicalMoveHistoryString(moveHistory2);
-      if (memory.wins.some((w) => w.moves === canonicalHistory)) return { score: 2e5 + depth * 100 };
-      if (memory.losses.some((l) => l.moves === canonicalHistory)) return { score: -2e5 - depth * 100 };
     }
     const moves = moveList || getValidMoves(currentBoard, currentMovesMade);
     const winForAI = checkWin(AI_PLAYER, currentBoard);
@@ -1361,7 +1356,7 @@ var useGameLogic = () => {
         const newBoard = currentBoard.map((r) => [...r]);
         newBoard[move.r][move.c] = AI_PLAYER;
         const newHistory = [...moveHistory2, { player: AI_PLAYER, r: move.r, c: move.c }];
-        const { score } = minimax(newBoard, currentMovesMade + 1, depth - 1, alpha, beta, false, scoringFunction, newHistory, memory, transpositionTable);
+        const { score } = minimax(newBoard, currentMovesMade + 1, depth - 1, alpha, beta, false, scoringFunction, newHistory, transpositionTable);
         if (score > maxEval) {
           maxEval = score;
           bestMove = move;
@@ -1387,7 +1382,7 @@ var useGameLogic = () => {
         const newBoard = currentBoard.map((r) => [...r]);
         newBoard[move.r][move.c] = HUMAN_PLAYER;
         const newHistory = [...moveHistory2, { player: HUMAN_PLAYER, r: move.r, c: move.c }];
-        const { score } = minimax(newBoard, currentMovesMade + 1, depth - 1, alpha, beta, true, scoringFunction, newHistory, memory, transpositionTable);
+        const { score } = minimax(newBoard, currentMovesMade + 1, depth - 1, alpha, beta, true, scoringFunction, newHistory, transpositionTable);
         if (score < minEval) {
           minEval = score;
           bestMove = move;
@@ -1410,6 +1405,28 @@ var useGameLogic = () => {
     }
   };
   const getBestMove = (player, moves, currentBoard, gameHistory, currentMovesMade, memory, depth, scoringFunction) => {
+    if (player === AI_PLAYER && (memory.wins.length > 0 || memory.losses.length > 0)) {
+      const winningMoves = [];
+      let nonLosingMoves = [];
+      for (const move of moves) {
+        const newHistory = [...gameHistory, { player: AI_PLAYER, r: move.r, c: move.c }];
+        const nextCanonical = getCanonicalMoveHistoryString(newHistory);
+        const isOnWinningPath = memory.wins.some((w) => w.moves.startsWith(nextCanonical));
+        if (isOnWinningPath) {
+          winningMoves.push(move);
+        }
+        const isOnLosingPath = memory.losses.some((l) => l.moves.startsWith(nextCanonical));
+        if (!isOnLosingPath) {
+          nonLosingMoves.push(move);
+        }
+      }
+      if (winningMoves.length > 0) {
+        return winningMoves[Math.floor(Math.random() * winningMoves.length)];
+      }
+      if (nonLosingMoves.length > 0 && nonLosingMoves.length < moves.length) {
+        moves = nonLosingMoves;
+      }
+    }
     moves.sort((a, b) => POSITIONAL_VALUE_MAP[b.r][b.c] - POSITIONAL_VALUE_MAP[a.r][a.c]);
     const immediateWinMove = moves.find((move) => {
       const tempBoard = currentBoard.map((r) => [...r]);
@@ -1428,7 +1445,7 @@ var useGameLogic = () => {
     const isMaximizing = player === AI_PLAYER;
     let bestMove;
     for (let d = 1; d <= depth; d++) {
-      const result = minimax(currentBoard, currentMovesMade, d, -Infinity, Infinity, isMaximizing, scoringFunction, gameHistory, memory, transpositionTable, moves);
+      const result = minimax(currentBoard, currentMovesMade, d, -Infinity, Infinity, isMaximizing, scoringFunction, gameHistory, transpositionTable, moves);
       if (result.move) {
         bestMove = result.move;
       }
@@ -1515,7 +1532,7 @@ var useGameLogic = () => {
             break;
           }
           const newHistory = [...moveHistory, { player: AI_PLAYER, r: move.r, c: move.c }];
-          const { score } = minimax(newBoard, movesMade + 1, currentSetting.depth, -Infinity, Infinity, false, scoringFunction, newHistory, { wins: [], losses: [] }, transpositionTable);
+          const { score } = minimax(newBoard, movesMade + 1, currentSetting.depth, -Infinity, Infinity, false, scoringFunction, newHistory, transpositionTable);
           moveScores.push({ move, score });
         }
         if (moveScores.length > 0) {
@@ -2255,7 +2272,7 @@ import { useState as useState5, useRef as useRef4, useEffect as useEffect3 } fro
 // components/OnlineControls.tsx
 import { useState as useState4, useRef as useRef3 } from "react";
 import { jsx as jsx6, jsxs as jsxs5 } from "react/jsx-runtime";
-var OnlineControls = ({ onlineRole, setOnlineRole, gameStateString, loadOnlineGame, currentPlayer, isGameOver, allDisabled, onUIClick }) => {
+var OnlineControls = ({ onlineRole, setOnlineRole, gameStateString, loadOnlineGame, currentPlayer, isGameOver, allDisabled, onUIClick, movesMade }) => {
   const [pastedCode, setPastedCode] = useState4("");
   const codeTextRef = useRef3(null);
   const [copySuccess, setCopySuccess] = useState4(false);
@@ -2312,6 +2329,7 @@ var OnlineControls = ({ onlineRole, setOnlineRole, gameStateString, loadOnlineGa
       ] }),
       /* @__PURE__ */ jsx6("p", { className: "font-semibold control-label min-h-[20px]", children: isGameOver ? "Game Over!" : isMyTurn ? "It's your turn!" : `Waiting for Player ${currentPlayer}...` })
     ] }),
+    isMyTurn && movesMade === 0 && /* @__PURE__ */ jsx6("p", { className: "text-center control-label mt-2 p-2 rounded", style: { backgroundColor: "rgba(0,0,0,0.05)" }, children: "Make your first move to generate a game code to share." }),
     !isMyTurn && !isGameOver && /* @__PURE__ */ jsxs5("div", { className: "flex flex-col gap-2", children: [
       /* @__PURE__ */ jsx6("label", { htmlFor: "game-code-input", className: "control-label", children: "Paste opponent's game code:" }),
       /* @__PURE__ */ jsx6(
@@ -2363,69 +2381,17 @@ var ReleaseNotesModal = ({ onClose }) => {
           className: "component-panel rounded-lg p-6 max-w-lg w-full text-center relative transform animate-pop-in-modal max-h-[90vh] flex flex-col",
           onClick: (e) => e.stopPropagation(),
           children: [
-            /* @__PURE__ */ jsx7("h2", { className: "text-3xl font-bold title-font mb-4", style: { color: "var(--text-header)" }, children: "Version 1.1.1 Patch Notes" }),
+            /* @__PURE__ */ jsx7("h2", { className: "text-3xl font-bold title-font mb-4", style: { color: "var(--text-header)" }, children: "Version 1.1.2 Patch Notes" }),
             /* @__PURE__ */ jsxs6("div", { className: "overflow-y-auto text-left space-y-4 text-base pr-2 -mr-2", children: [
-              /* @__PURE__ */ jsx7("p", { children: "This is a major update focused on significantly upgrading Professor Caz's AI and improving the overall quality of life for all players." }),
+              /* @__PURE__ */ jsx7("p", { children: "This is a quality-of-life patch focused on improving the online multiplayer experience." }),
               /* @__PURE__ */ jsxs6("div", { children: [
-                /* @__PURE__ */ jsx7("h3", { className: "font-bold text-lg", style: { color: "var(--text-panel)" }, children: "Major AI Overhaul: The Professor's Brain Upgrade" }),
-                /* @__PURE__ */ jsxs6("ul", { className: "list-disc list-inside space-y-2 mt-2 text-sm", children: [
-                  /* @__PURE__ */ jsxs6("li", { children: [
-                    /* @__PURE__ */ jsx7("strong", { children: "Blazing Fast Performance:" }),
-                    " The AI's core logic has been rewritten to use an advanced technique called ",
-                    /* @__PURE__ */ jsx7("strong", { children: "Bitboards" }),
-                    ". This makes his move calculations, board evaluations, and win-checking hundreds of times faster. You'll notice near-instantaneous moves, even on the highest difficulty levels."
-                  ] }),
-                  /* @__PURE__ */ jsxs6("li", { children: [
-                    /* @__PURE__ */ jsx7("strong", { children: "Enhanced Tactical Strength:" }),
-                    " We've implemented ",
-                    /* @__PURE__ */ jsx7("strong", { children: "Quiescence Search" }),
-                    ', a powerful optimization that helps the AI avoid the "horizon effect." Professor Caz is now much better at spotting and defending against multi-move threats.'
-                  ] }),
-                  /* @__PURE__ */ jsxs6("li", { children: [
-                    /* @__PURE__ */ jsx7("strong", { children: "Smarter Search:" }),
-                    " The AI now recognizes ",
-                    /* @__PURE__ */ jsx7("strong", { children: "Board Symmetries" }),
-                    ". He understands that a rotated or reflected board is strategically the same, preventing him from wasting time recalculating identical positions. This, combined with improved ",
-                    /* @__PURE__ */ jsx7("strong", { children: "Move Ordering" }),
-                    " and ",
-                    /* @__PURE__ */ jsx7("strong", { children: "Iterative Deepening" }),
-                    ", allows him to think deeper and more efficiently."
-                  ] }),
-                  /* @__PURE__ */ jsxs6("li", { children: [
-                    /* @__PURE__ */ jsx7("strong", { children: "Less Predictable, More Human (Lower Levels):" }),
-                    ' The AI is now much less predictable on easier difficulties, providing a more engaging experience. "Beginner" makes more purposeful, weighted-random moves, while "Novice" and "Intermediate" will now choose from a pool of "good" moves rather than the single "perfect" move every time.'
-                  ] })
-                ] })
+                /* @__PURE__ */ jsx7("h3", { className: "font-bold text-lg", style: { color: "var(--text-panel)" }, children: "Online Multiplayer Update" }),
+                /* @__PURE__ */ jsx7("ul", { className: "list-disc list-inside space-y-2 mt-2 text-sm", children: /* @__PURE__ */ jsxs6("li", { children: [
+                  /* @__PURE__ */ jsx7("strong", { children: "Smarter Game Codes:" }),
+                  " When starting a new online game as Player X, the shareable game code will now only be generated *after* you make your first move. This makes the process more intuitive and prevents sharing codes for empty boards."
+                ] }) })
               ] }),
-              /* @__PURE__ */ jsxs6("div", { children: [
-                /* @__PURE__ */ jsx7("h3", { className: "font-bold text-lg", style: { color: "var(--text-panel)" }, children: "Quality of Life & UI/UX Improvements" }),
-                /* @__PURE__ */ jsxs6("ul", { className: "list-disc list-inside space-y-2 mt-2 text-sm", children: [
-                  /* @__PURE__ */ jsxs6("li", { children: [
-                    /* @__PURE__ */ jsx7("strong", { children: "Forfeit Confirmation:" }),
-                    " Starting a new game or changing the difficulty mid-match now brings up a confirmation pop-up, asking if you want to forfeit the current game (which will count as a loss). No more accidental resets!"
-                  ] }),
-                  /* @__PURE__ */ jsxs6("li", { children: [
-                    /* @__PURE__ */ jsx7("strong", { children: "Screen Wake Lock:" }),
-                    " For our mobile players, the screen will no longer automatically lock or turn off while you're in the middle of a game."
-                  ] }),
-                  /* @__PURE__ */ jsxs6("li", { children: [
-                    /* @__PURE__ */ jsx7("strong", { children: "Interactive Trophies:" }),
-                    " In the Player Stats modal, you can now click on any *unlocked* achievement to see its full name and description."
-                  ] }),
-                  /* @__PURE__ */ jsxs6("li", { children: [
-                    /* @__PURE__ */ jsx7("strong", { children: "No More Interruptions:" }),
-                    " The right-click context menu has been disabled to prevent it from accidentally pausing the AI's turn."
-                  ] })
-                ] })
-              ] }),
-              /* @__PURE__ */ jsxs6("div", { children: [
-                /* @__PURE__ */ jsx7("h3", { className: "font-bold text-lg", style: { color: "var(--text-panel)" }, children: "Bug Fixes" }),
-                /* @__PURE__ */ jsxs6("ul", { className: "list-disc list-inside space-y-2 mt-2 text-sm", children: [
-                  /* @__PURE__ */ jsx7("li", { children: "Addressed several critical bugs related to the new bitboard engine to ensure all win conditions are detected correctly and fairly." }),
-                  /* @__PURE__ */ jsx7("li", { children: "Numerous minor stability and performance improvements." })
-                ] })
-              ] }),
-              /* @__PURE__ */ jsx7("p", { className: "pt-2", children: "Thank you for playing and for all your valuable feedback! We hope you enjoy the new and improved challenge." })
+              /* @__PURE__ */ jsx7("p", { className: "pt-2", children: "Thank you for your feedback! It helps make the game better for everyone." })
             ] }),
             /* @__PURE__ */ jsx7("div", { className: "mt-6", children: /* @__PURE__ */ jsx7(
               "button",
@@ -2481,6 +2447,7 @@ var Controls = ({
   loadOnlineGame,
   currentPlayer,
   gameOver,
+  movesMade,
   adaptiveLevel,
   autoAdjustLevel,
   isLabUnlocked,
@@ -2503,7 +2470,7 @@ var Controls = ({
   const fileInputRef = useRef4(null);
   const [activeTab, setActiveTab] = useState5("setup");
   const [showReleaseNotesModal, setShowReleaseNotesModal] = useState5(false);
-  const appVersion = "1.1.1";
+  const appVersion = "1.1.2";
   const [tempPlayerName, setTempPlayerName] = useState5(playerName);
   const [tempPlayerPiece, setTempPlayerPiece] = useState5(playerPiece);
   const [tempPlayerOName, setTempPlayerOName] = useState5(playerOName);
@@ -2640,6 +2607,7 @@ var Controls = ({
             loadOnlineGame,
             currentPlayer,
             isGameOver: gameOver,
+            movesMade,
             allDisabled,
             onUIClick
           }
@@ -3741,6 +3709,7 @@ var App = () => {
         loadOnlineGame: actions.loadOnlineGame,
         currentPlayer,
         gameOver,
+        movesMade,
         isTutorialActive
       }
     ) }),
