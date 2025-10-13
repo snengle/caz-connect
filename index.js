@@ -38,13 +38,13 @@ var ACHIEVEMENTS = {
   },
   WIN_STREAK_5: {
     name: "On Fire!",
-    description: "Achieve a 5-game win streak against the AI on Intermediate or higher.",
+    description: "Achieve a 5-game win streak against Professor Caz on Intermediate or higher.",
     lockedDescription: "??????????",
     icon: "\u{1F525}"
   },
   BEAT_GRAND_MASTER: {
     name: "Master Mind",
-    description: "Defeat the 'Grand Master' level AI.",
+    description: "Defeat the 'Grand Master' level Professor Caz.",
     lockedDescription: "??????????",
     icon: "\u{1F9E0}"
   },
@@ -62,7 +62,7 @@ var ACHIEVEMENTS = {
   },
   GRAND_TOUR: {
     name: "Grand Tour",
-    description: "Win against every AI level from Beginner to Grand Master.",
+    description: "Win against every Professor Caz level from Beginner to Grand Master.",
     icon: "\u{1F5FA}\uFE0F",
     lockedDescription: "??????????"
   },
@@ -121,6 +121,8 @@ var getValidMoves = (board, movesMade) => {
   return moves;
 };
 var checkWin = (player, board) => {
+  const allWins = [];
+  const processedCells = /* @__PURE__ */ new Set();
   const directions = [
     { r: 0, c: 1 },
     { r: 1, c: 0 },
@@ -129,7 +131,7 @@ var checkWin = (player, board) => {
   ];
   for (let r = 0; r < BOARD_SIZE; r++) {
     for (let c = 0; c < BOARD_SIZE; c++) {
-      if (board[r][c] !== player) {
+      if (board[r][c] !== player || processedCells.has(`${r},${c}`)) {
         continue;
       }
       for (const dir of directions) {
@@ -143,7 +145,7 @@ var checkWin = (player, board) => {
             break;
           }
         }
-        if (line.length === 4) {
+        if (line.length >= 4) {
           let prevR = r - dir.r;
           let prevC = c - dir.c;
           while (prevR >= 0 && prevR < BOARD_SIZE && prevC >= 0 && prevC < BOARD_SIZE && board[prevR][prevC] === player) {
@@ -159,35 +161,48 @@ var checkWin = (player, board) => {
             nextR += dir.r;
             nextC += dir.c;
           }
-          return line;
+          allWins.push(line);
+          line.forEach((cell) => processedCells.add(`${cell.r},${cell.c}`));
         }
       }
     }
   }
-  return null;
+  return allWins.length > 0 ? allWins : null;
 };
-var rotateMove = (move) => ({ r: move.c, c: BOARD_SIZE - 1 - move.r });
-var flipMove = (move) => ({ r: move.r, c: BOARD_SIZE - 1 - move.c });
-var transformHistory = (history, transformations) => {
-  return history.map((item) => {
-    let transformedMove = { r: item.r, c: item.c };
-    for (const transform of transformations) {
-      transformedMove = transform(transformedMove);
+var getCanonicalPatternKey = (pieces) => {
+  const s1 = pieces.map((p) => p || "-").join("");
+  const s2 = [...pieces].reverse().map((p) => p || "-").join("");
+  return s1 < s2 ? s1 : s2;
+};
+var extractPatternsFromBoard = (board) => {
+  const patterns = /* @__PURE__ */ new Map();
+  const directions = [[0, 1], [1, 0], [1, 1], [1, -1]];
+  for (let r = 0; r < BOARD_SIZE; r++) {
+    for (let c = 0; c < BOARD_SIZE; c++) {
+      for (const [dr, dc] of directions) {
+        if (r + 4 * dr < 0 || r + 4 * dr >= BOARD_SIZE || c + 4 * dc < 0 || c + 4 * dc >= BOARD_SIZE) {
+          continue;
+        }
+        const window2 = [];
+        for (let i = 0; i < 5; i++) {
+          window2.push(board[r + i * dr][c + i * dc]);
+        }
+        const xCount = window2.filter((p) => p === PLAYER_X).length;
+        const oCount = window2.filter((p) => p === PLAYER_O).length;
+        if (xCount > 0 && oCount > 0) {
+          continue;
+        }
+        if (xCount >= 2) {
+          const key = getCanonicalPatternKey(window2);
+          patterns.set(key, PLAYER_X);
+        } else if (oCount >= 2) {
+          const key = getCanonicalPatternKey(window2);
+          patterns.set(key, PLAYER_O);
+        }
+      }
     }
-    return { ...item, r: transformedMove.r, c: transformedMove.c };
-  });
-};
-var historyToString = (history) => history.map((m) => `${m.player}:${m.r},${m.c}`).join(";");
-var getCanonicalMoveHistoryString = (history) => {
-  if (history.length === 0) return "";
-  const symmetries = [];
-  let currentHistory = [...history];
-  for (let i = 0; i < 4; i++) {
-    symmetries.push(historyToString(currentHistory));
-    symmetries.push(historyToString(transformHistory(currentHistory, [flipMove])));
-    currentHistory = transformHistory(currentHistory, [rotateMove]);
   }
-  return symmetries.sort()[0];
+  return patterns;
 };
 var boardToKey = (board) => {
   return board.map((row) => row.map((cell) => cell || "-").join("")).join("|");
@@ -266,7 +281,7 @@ var useGameLogic = () => {
   });
   const [isThinking, setIsThinking] = useState(false);
   const [moveHistory, setMoveHistory] = useState(initialConfig.initialGameState?.moveHistory || []);
-  const [gameMemory, setGameMemory] = useState({ wins: [], losses: [] });
+  const [gameMemory, setGameMemory] = useState({ patterns: {}, losingMoves: {} });
   const [invalidMove, setInvalidMove] = useState(null);
   const [animationInfo, setAnimationInfo] = useState(null);
   const isSimulatingRef = useRef(false);
@@ -331,18 +346,10 @@ var useGameLogic = () => {
   });
   const [levelChange, setLevelChange] = useState(null);
   const muteToggleTimestamps = useRef([]);
-  const [adaptiveWinStreak, setAdaptiveWinStreak] = useState(() => {
+  const [performancePoints, setPerformancePoints] = useState(() => {
     try {
-      const saved = localStorage.getItem("cazConnectAdaptiveWinStreak");
-      return saved ? parseInt(saved, 10) : 0;
-    } catch {
-      return 0;
-    }
-  });
-  const [adaptiveLossStreak, setAdaptiveLossStreak] = useState(() => {
-    try {
-      const saved = localStorage.getItem("cazConnectAdaptiveLossStreak");
-      return saved ? parseInt(saved, 10) : 0;
+      const saved = localStorage.getItem("cazConnectPerformancePoints");
+      return saved ? parseFloat(saved) : 0;
     } catch {
       return 0;
     }
@@ -361,6 +368,7 @@ var useGameLogic = () => {
       const parsed = saved ? JSON.parse(saved) : {};
       return {
         maxWinStreak: 0,
+        currentWinStreak: 0,
         totalMoves: 0,
         totalGamesVsAi: 0,
         openingMoves: {},
@@ -368,7 +376,7 @@ var useGameLogic = () => {
         ...parsed
       };
     } catch {
-      return { maxWinStreak: 0, totalMoves: 0, totalGamesVsAi: 0, openingMoves: {}, levelsBeaten: [] };
+      return { maxWinStreak: 0, currentWinStreak: 0, totalMoves: 0, totalGamesVsAi: 0, openingMoves: {}, levelsBeaten: [] };
     }
   });
   const [unlockedAchievements, setUnlockedAchievements] = useState(() => {
@@ -499,18 +507,11 @@ var useGameLogic = () => {
   }, [isAiLearningEnabled]);
   useEffect(() => {
     try {
-      localStorage.setItem("cazConnectAdaptiveWinStreak", String(adaptiveWinStreak));
+      localStorage.setItem("cazConnectPerformancePoints", String(performancePoints));
     } catch (e) {
-      console.error("Failed to save adaptive win streak", e);
+      console.error("Failed to save performance points", e);
     }
-  }, [adaptiveWinStreak]);
-  useEffect(() => {
-    try {
-      localStorage.setItem("cazConnectAdaptiveLossStreak", String(adaptiveLossStreak));
-    } catch (e) {
-      console.error("Failed to save adaptive loss streak", e);
-    }
-  }, [adaptiveLossStreak]);
+  }, [performancePoints]);
   useEffect(() => {
     try {
       localStorage.setItem("cazConnectAiStats", JSON.stringify(aiStats));
@@ -748,7 +749,7 @@ var useGameLogic = () => {
         const savedMemory = localStorage.getItem("cazConnectMemory");
         if (savedMemory) {
           const parsedMemory = JSON.parse(savedMemory);
-          if (parsedMemory && Array.isArray(parsedMemory.wins) && Array.isArray(parsedMemory.losses)) {
+          if (parsedMemory && parsedMemory.patterns) {
             setGameMemory(parsedMemory);
             return;
           }
@@ -762,7 +763,7 @@ var useGameLogic = () => {
           throw new Error(`HTTP error! status: ${response.status}`);
         }
         const defaultBrain = await response.json();
-        if (defaultBrain && Array.isArray(defaultBrain.wins) && Array.isArray(defaultBrain.losses)) {
+        if (defaultBrain && defaultBrain.patterns) {
           setGameMemory(defaultBrain);
           localStorage.setItem("cazConnectMemory", JSON.stringify(defaultBrain));
         } else {
@@ -807,13 +808,23 @@ var useGameLogic = () => {
         newStats[adaptiveLevel] = levelStat;
         return newStats;
       });
+      let newCurrentWinStreak = detailedStats.currentWinStreak || 0;
+      if (winner === HUMAN_PLAYER) {
+        newCurrentWinStreak++;
+      } else {
+        newCurrentWinStreak = 0;
+      }
+      if (newCurrentWinStreak >= 5 && adaptiveLevel >= 2) {
+        grantAchievement("WIN_STREAK_5");
+      }
       setDetailedStats((prev) => {
         const newStats = { ...prev };
         if (!newStats.levelsBeaten) newStats.levelsBeaten = [];
         newStats.totalGamesVsAi += 1;
         newStats.totalMoves += history.length;
+        newStats.currentWinStreak = newCurrentWinStreak;
+        newStats.maxWinStreak = Math.max(prev.maxWinStreak, newCurrentWinStreak);
         if (winner === HUMAN_PLAYER) {
-          newStats.maxWinStreak = Math.max(prev.maxWinStreak, adaptiveWinStreak + 1);
           if (!newStats.levelsBeaten.includes(adaptiveLevel)) {
             newStats.levelsBeaten.push(adaptiveLevel);
           }
@@ -822,7 +833,7 @@ var useGameLogic = () => {
       });
       if (winner === HUMAN_PLAYER) {
         grantAchievement("FIRST_WIN");
-        if (winInfo && winInfo.length >= 6 && adaptiveLevel >= 2) {
+        if (winInfo && winInfo.some((line) => line.length >= 6) && adaptiveLevel >= 2) {
           grantAchievement("GRAVITY_MASTER");
         }
         if (adaptiveLevel === 5) {
@@ -837,63 +848,102 @@ var useGameLogic = () => {
           grantAchievement("GRAND_TOUR");
         }
       }
-    }
-    const canonicalMoveString = getCanonicalMoveHistoryString(history);
-    if (adaptiveLevel === 5 && isAiLearningEnabled) {
-      setGameMemory((prevMemory) => {
-        const newMemory = { ...prevMemory };
-        if (winner === AI_PLAYER) {
-          if (canonicalMoveString && !newMemory.wins.some((w) => w.moves === canonicalMoveString)) {
-            newMemory.wins = [...newMemory.wins, { moves: canonicalMoveString }];
-          }
-        } else if (winner === HUMAN_PLAYER) {
-          if (canonicalMoveString && !newMemory.losses.some((l) => l.moves === canonicalMoveString)) {
-            newMemory.losses = [...newMemory.losses, { moves: canonicalMoveString }];
-          }
-        }
-        try {
-          localStorage.setItem("cazConnectMemory", JSON.stringify(newMemory));
-        } catch (error) {
-          console.error("Failed to save AI memory to localStorage", error);
-        }
-        return newMemory;
-      });
-    }
-    if (gameMode === "pvc" /* PvC */) {
-      let newWinStreak = adaptiveWinStreak;
-      let newLossStreak = adaptiveLossStreak;
-      if (winner === HUMAN_PLAYER) {
-        newWinStreak += 1;
-        newLossStreak = 0;
-        if (newWinStreak >= 5 && adaptiveLevel >= 2) grantAchievement("WIN_STREAK_5");
-      } else {
-        newWinStreak = 0;
-        if (winner === AI_PLAYER) {
-          newLossStreak += 1;
-        }
-      }
-      setAdaptiveWinStreak(newWinStreak);
-      setAdaptiveLossStreak(newLossStreak);
       if (autoAdjustLevel) {
-        if (newWinStreak >= 3) {
+        const PROMOTION_THRESHOLD = 2.5;
+        const DEMOTION_THRESHOLD = -2.5;
+        const QUICK_GAME_MOVES = 20;
+        const LONG_GAME_MOVES = 35;
+        let score = 0;
+        if (winner === HUMAN_PLAYER) {
+          score = 1;
+        } else if (winner === AI_PLAYER) {
+          score = -1;
+        }
+        if (score !== 0) {
+          const gameLength = history.length;
+          if (gameLength < QUICK_GAME_MOVES) {
+            score *= 1.5;
+          } else if (gameLength > LONG_GAME_MOVES) {
+            score *= 0.75;
+          }
+        }
+        const newPoints = performancePoints + score;
+        if (newPoints >= PROMOTION_THRESHOLD) {
           setAdaptiveLevel((l) => {
             const newLevel = Math.min(l + 1, 5);
             if (newLevel > l) setLevelChange("promoted");
             return newLevel;
           });
-          setAdaptiveWinStreak(0);
-        }
-        if (newLossStreak >= 3) {
+          setPerformancePoints(0);
+        } else if (newPoints <= DEMOTION_THRESHOLD) {
           setAdaptiveLevel((l) => {
             const newLevel = Math.max(l - 1, 0);
             if (newLevel < l) setLevelChange("demoted");
             return newLevel;
           });
-          setAdaptiveLossStreak(0);
+          setPerformancePoints(0);
+        } else {
+          setPerformancePoints(newPoints);
         }
       }
     }
-  }, [gameMode, adaptiveLevel, autoAdjustLevel, isAiLearningEnabled, adaptiveWinStreak, adaptiveLossStreak, grantAchievement, winInfo, detailedStats.levelsBeaten]);
+    if (adaptiveLevel >= 4 && isAiLearningEnabled) {
+      if (winner !== null) {
+        setGameMemory((prevMemory) => {
+          const newMemory = {
+            patterns: { ...prevMemory.patterns },
+            losingMoves: prevMemory.losingMoves ? { ...prevMemory.losingMoves } : {}
+          };
+          const LOOKBACK_STEPS = 3;
+          const BASE_LEARNING_RATE = 1;
+          const LEARNING_RATE_DECAY = 0.5;
+          let tempHistory = [...history];
+          for (let i = 0; i < LOOKBACK_STEPS; i++) {
+            if (tempHistory.length === 0) break;
+            const tempBoard = createInitialBoard();
+            tempHistory.forEach((move) => {
+              tempBoard[move.r][move.c] = move.player;
+            });
+            const learningRate = BASE_LEARNING_RATE * Math.pow(LEARNING_RATE_DECAY, i);
+            const patternsOnBoard = extractPatternsFromBoard(tempBoard);
+            patternsOnBoard.forEach((p, key) => {
+              if (p === winner) {
+                newMemory.patterns[key] = (newMemory.patterns[key] || 0) + learningRate;
+              } else {
+                newMemory.patterns[key] = (newMemory.patterns[key] || 0) - learningRate;
+              }
+            });
+            if (tempHistory.length > 0) tempHistory.pop();
+            if (tempHistory.length > 0) tempHistory.pop();
+          }
+          if (winner === HUMAN_PLAYER) {
+            const LOOKBACK_MOVES = 4;
+            let aiMovesFound = 0;
+            const gameHistory = [...history];
+            for (let i = gameHistory.length - 1; i >= 0 && aiMovesFound < LOOKBACK_MOVES; i--) {
+              const move = gameHistory[i];
+              if (move.player === AI_PLAYER) {
+                const boardStateBeforeMove = createInitialBoard();
+                for (let j = 0; j < i; j++) {
+                  const pastMove = gameHistory[j];
+                  boardStateBeforeMove[pastMove.r][pastMove.c] = pastMove.player;
+                }
+                const boardKey = getCanonicalBoardKey(boardStateBeforeMove);
+                newMemory.losingMoves[boardKey] = { r: move.r, c: move.c };
+                aiMovesFound++;
+              }
+            }
+          }
+          try {
+            localStorage.setItem("cazConnectMemory", JSON.stringify(newMemory));
+          } catch (error) {
+            console.error("Failed to save AI memory to localStorage", error);
+          }
+          return newMemory;
+        });
+      }
+    }
+  }, [gameMode, adaptiveLevel, autoAdjustLevel, isAiLearningEnabled, detailedStats, grantAchievement, winInfo, performancePoints]);
   const getAnimationSource = useCallback((r, c, currentBoard, currentMovesMade) => {
     if (currentMovesMade === 0 || isOnWall(r, c)) {
       return { r, c };
@@ -1040,13 +1090,13 @@ var useGameLogic = () => {
         winBoard[7][1] = PLAYER_O;
         setBoard(winBoard);
         setMovesMade(8);
-        setWinInfo([{ r: 0, c: 3 }, { r: 1, c: 3 }, { r: 2, c: 3 }, { r: 3, c: 3 }]);
+        setWinInfo([[{ r: 0, c: 3 }, { r: 1, c: 3 }, { r: 2, c: 3 }, { r: 3, c: 3 }]]);
         setGameOver(true);
       }
     },
     // Step 2
     {
-      text: "Now for the most important rule: the 'Gravity Connection'. Your first move must be on an outer wall, like the highlighted squares.",
+      text: "Now for the most important rule. Your first move must be on an outer wall, like the highlighted squares.",
       highlight: { type: "border" },
       isInteractive: false,
       action: () => {
@@ -1055,14 +1105,14 @@ var useGameLogic = () => {
     },
     // Step 3
     {
-      text: "Now it's your turn! Try placing your 'X' piece on any of the highlighted wall squares.",
+      text: "Your turn! Try placing your 'X' piece on any of the highlighted wall squares.",
       highlight: { type: "border" },
       isInteractive: true,
       advancesOnClick: true
     },
     // Step 4
     {
-      text: () => `Excellent! Now watch my move.`,
+      text: () => `Excellent! Now watch my move. I'll play somewhere else on the wall.`,
       highlight: null,
       isInteractive: false,
       action: () => {
@@ -1086,14 +1136,63 @@ var useGameLogic = () => {
         }, 500);
       }
     },
-    // Step 5: Gameplay step
+    // Step 5 (NEW)
     {
-      text: "Now, the real game begins! Your goal is to get four of your pieces in a row to win. I'll go easy on you.",
+      text: "Great! Now for the 'Gravity' rule. A piece must always have a solid line of other pieces connecting it to a wall. These are your 'Gravity Bridges'. Try placing another piece.",
+      highlight: { type: "cells", cells: getValidMoves(board, movesMade) },
+      isInteractive: true,
+      advancesOnClick: true
+    },
+    // Step 6 (NEW)
+    {
+      text: "Aha, a clever move! I see you're trying to build a bridge. I'll have to play nearby to counter.",
+      highlight: null,
+      isInteractive: false,
+      action: () => {
+        setTimeout(() => {
+          if (!lastMove) return;
+          const directions = [[-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [-1, 1], [1, -1], [1, 1]];
+          let blockMove;
+          const adjacentMoves = [];
+          for (const [dr, dc] of directions) {
+            const r = lastMove.r + dr;
+            const c = lastMove.c + dc;
+            if (isValidMove(r, c, board, movesMade)) {
+              adjacentMoves.push({ r, c });
+            }
+          }
+          if (adjacentMoves.length > 0) {
+            blockMove = adjacentMoves[Math.floor(Math.random() * adjacentMoves.length)];
+          }
+          if (blockMove) {
+            makeMove(blockMove.r, blockMove.c);
+          } else {
+            const moves = getValidMoves(board, movesMade).filter((m) => m.r !== lastMove.r || m.c !== lastMove.c);
+            if (moves.length > 0) makeMove(moves[Math.floor(Math.random() * moves.length)].r, moves[Math.floor(Math.random() * moves.length)].c);
+          }
+          setTimeout(() => advanceTutorial(), 1e3);
+        }, 500);
+      }
+    },
+    // Step 7 (NEW)
+    {
+      text: "Notice the 'Auto-Adjust Level' toggle in the setup panel? If you keep winning, I'll get tougher. If you struggle, I'll ease up. This keeps things fair!",
+      highlight: null,
+      isInteractive: false
+    },
+    // Step 8 (NEW)
+    {
+      text: "Should you prove to be a true master, you might unlock my secret lab... There, you can enable my 'Learning Mode,' where I remember every game we play!",
+      highlight: null,
+      isInteractive: false
+    },
+    // Step 9 (was 5)
+    {
+      text: "Enough talk! Let's finish this game. Your goal is to get four in a row. I'll go easy on you... for now. Your turn!",
       highlight: { type: "cells", cells: getValidMoves(board, movesMade) },
       isInteractive: true
-      // advancesOnClick is false by default
     },
-    // Step 6: Final step
+    // Step 10 (was 6)
     {
       text: "Congratulations, you did it! You've won your first game. You're ready to challenge me for real now.",
       highlight: null,
@@ -1261,9 +1360,9 @@ var useGameLogic = () => {
       setOnlineRoleInternal(newCurrentPlayer);
       const winningPlayer = lastValidMove ? simBoard[lastValidMove.r][lastValidMove.c] : null;
       if (winningPlayer) {
-        const winLine = checkWin(winningPlayer, simBoard);
-        if (winLine) {
-          setWinInfo(winLine);
+        const winLines = checkWin(winningPlayer, simBoard);
+        if (winLines) {
+          setWinInfo(winLines);
           setGameOver(true);
           playSound("win");
         }
@@ -1295,11 +1394,10 @@ var useGameLogic = () => {
             const playerCount = window2.filter((p) => p === player).length;
             const opponentCount = window2.filter((p) => p === opponent).length;
             const emptyCount = window2.filter((p) => p === null).length;
-            if (playerCount === 4) score += 1e5;
-            else if (playerCount === 3 && emptyCount === 1) score += 100;
-            else if (playerCount === 2 && emptyCount === 2) score += 10;
-            if (opponentCount === 3 && emptyCount === 1) score -= 5e3;
-            else if (opponentCount === 2 && emptyCount === 2) score -= 50;
+            if (playerCount === 3 && emptyCount === 1) score += 500;
+            else if (playerCount === 2 && emptyCount === 2) score += 50;
+            if (opponentCount === 3 && emptyCount === 1) score -= 1e4;
+            else if (opponentCount === 2 && emptyCount === 2) score -= 250;
           }
         });
       }
@@ -1405,52 +1503,59 @@ var useGameLogic = () => {
     }
   };
   const getBestMove = (player, moves, currentBoard, gameHistory, currentMovesMade, memory, depth, scoringFunction) => {
-    if (player === AI_PLAYER && (memory.wins.length > 0 || memory.losses.length > 0)) {
-      const winningMoves = [];
-      let nonLosingMoves = [];
-      for (const move of moves) {
-        const newHistory = [...gameHistory, { player: AI_PLAYER, r: move.r, c: move.c }];
-        const nextCanonical = getCanonicalMoveHistoryString(newHistory);
-        const isOnWinningPath = memory.wins.some((w) => w.moves.startsWith(nextCanonical));
-        if (isOnWinningPath) {
-          winningMoves.push(move);
-        }
-        const isOnLosingPath = memory.losses.some((l) => l.moves.startsWith(nextCanonical));
-        if (!isOnLosingPath) {
-          nonLosingMoves.push(move);
-        }
+    const PATTERN_WEIGHT = 15;
+    const learningScoringFunction = (b, p) => {
+      let score = scoringFunction(b, p);
+      if (isAiLearningEnabled && Object.keys(memory.patterns).length > 0) {
+        const patterns = extractPatternsFromBoard(b);
+        patterns.forEach((patternPlayer, key) => {
+          const patternValue = memory.patterns[key];
+          if (patternValue) {
+            if (patternPlayer === AI_PLAYER) {
+              score += patternValue * PATTERN_WEIGHT;
+            } else {
+              score -= patternValue * PATTERN_WEIGHT;
+            }
+          }
+        });
       }
-      if (winningMoves.length > 0) {
-        return winningMoves[Math.floor(Math.random() * winningMoves.length)];
-      }
-      if (nonLosingMoves.length > 0 && nonLosingMoves.length < moves.length) {
-        moves = nonLosingMoves;
+      return score;
+    };
+    let potentialMoves = [...moves];
+    potentialMoves.sort((a, b) => POSITIONAL_VALUE_MAP[b.r][b.c] - POSITIONAL_VALUE_MAP[a.r][a.c]);
+    if (isAiLearningEnabled && memory.losingMoves) {
+      const boardKey = getCanonicalBoardKey(currentBoard);
+      const losingMove = memory.losingMoves[boardKey];
+      if (losingMove) {
+        const filteredMoves = potentialMoves.filter((move) => move.r !== losingMove.r || move.c !== losingMove.c);
+        if (filteredMoves.length > 0) {
+          potentialMoves = filteredMoves;
+        }
       }
     }
-    moves.sort((a, b) => POSITIONAL_VALUE_MAP[b.r][b.c] - POSITIONAL_VALUE_MAP[a.r][a.c]);
-    const immediateWinMove = moves.find((move) => {
+    const immediateWinMove = potentialMoves.find((move) => {
       const tempBoard = currentBoard.map((r) => [...r]);
       tempBoard[move.r][move.c] = player;
-      return checkWin(player, tempBoard);
+      return !!checkWin(player, tempBoard);
     });
     if (immediateWinMove) return immediateWinMove;
     const opponent = player === PLAYER_X ? PLAYER_O : PLAYER_X;
-    const immediateBlockMove = moves.find((move) => {
+    const immediateBlockMove = potentialMoves.find((move) => {
       const tempBoard = currentBoard.map((r) => [...r]);
       tempBoard[move.r][move.c] = opponent;
-      return checkWin(opponent, tempBoard);
+      return !!checkWin(opponent, tempBoard);
     });
     if (immediateBlockMove) return immediateBlockMove;
     const transpositionTable = /* @__PURE__ */ new Map();
     const isMaximizing = player === AI_PLAYER;
     let bestMove;
     for (let d = 1; d <= depth; d++) {
-      const result = minimax(currentBoard, currentMovesMade, d, -Infinity, Infinity, isMaximizing, scoringFunction, gameHistory, transpositionTable, moves);
+      const result = minimax(currentBoard, currentMovesMade, d, -Infinity, Infinity, isMaximizing, learningScoringFunction, gameHistory, transpositionTable, potentialMoves);
       if (result.move) {
         bestMove = result.move;
       }
     }
-    return bestMove || moves[Math.floor(Math.random() * moves.length)];
+    return bestMove || potentialMoves[Math.floor(Math.random() * potentialMoves.length)];
   };
   const computerMove = useCallback(() => {
     const movePromise = (async () => {
@@ -1487,7 +1592,7 @@ var useGameLogic = () => {
         const immediateWinMove = potentialMoves.find((move) => {
           const tempBoard = board.map((r) => [...r]);
           tempBoard[move.r][move.c] = AI_PLAYER;
-          return checkWin(AI_PLAYER, tempBoard);
+          return !!checkWin(AI_PLAYER, tempBoard);
         });
         if (immediateWinMove) {
           bestMove = immediateWinMove;
@@ -1495,7 +1600,7 @@ var useGameLogic = () => {
           const immediateBlockMove = potentialMoves.find((move) => {
             const tempBoard = board.map((r) => [...r]);
             tempBoard[move.r][move.c] = HUMAN_PLAYER;
-            return checkWin(HUMAN_PLAYER, tempBoard);
+            return !!checkWin(HUMAN_PLAYER, tempBoard);
           });
           if (immediateBlockMove) {
             bestMove = immediateBlockMove;
@@ -1515,10 +1620,10 @@ var useGameLogic = () => {
       } else if (adaptiveLevel === 1 || adaptiveLevel === 2) {
         const settings = [
           null,
-          { depth: 1, strategic: false, threshold: 80 },
-          // 1: Novice
-          { depth: 2, strategic: false, threshold: 40 }
-          // 2: Intermediate
+          // Novice: Depth 1, wider probability spread among top 3 moves
+          { depth: 1, strategic: false, probabilities: [0.6, 0.3, 0.1] },
+          // Intermediate: Depth 2, heavily favors the best move but can still pick 2nd or 3rd
+          { depth: 2, strategic: false, probabilities: [0.85, 0.1, 0.05] }
         ];
         const currentSetting = settings[adaptiveLevel];
         const scoringFunction = currentSetting.strategic ? scorePositionStrategic : scorePositionTactical;
@@ -1536,15 +1641,22 @@ var useGameLogic = () => {
           moveScores.push({ move, score });
         }
         if (moveScores.length > 0) {
-          const bestScore = Math.max(...moveScores.map((ms) => ms.score));
-          if (bestScore === Infinity) {
-            bestMove = moveScores.find((ms) => ms.score === Infinity).move;
+          moveScores.sort((a, b) => b.score - a.score);
+          if (moveScores[0].score === Infinity) {
+            bestMove = moveScores[0].move;
           } else {
-            const goodMoves = moveScores.filter((ms) => ms.score >= bestScore - currentSetting.threshold).map((ms) => ms.move);
-            if (goodMoves.length > 0) {
-              bestMove = goodMoves[Math.floor(Math.random() * goodMoves.length)];
-            } else {
-              bestMove = moveScores.sort((a, b) => b.score - a.score)[0].move;
+            const rand = Math.random();
+            let cumulativeProb = 0;
+            const topMoves = moveScores.slice(0, currentSetting.probabilities.length);
+            for (let i = 0; i < topMoves.length; i++) {
+              cumulativeProb += currentSetting.probabilities[i];
+              if (rand < cumulativeProb) {
+                bestMove = topMoves[i].move;
+                break;
+              }
+            }
+            if (!bestMove) {
+              bestMove = topMoves[0].move;
             }
           }
         }
@@ -1553,24 +1665,23 @@ var useGameLogic = () => {
           null,
           null,
           null,
-          { depth: 3, strategic: true, useMemory: false },
+          { depth: 3, strategic: true },
           // 3: Expert
-          { depth: 3, strategic: true, useMemory: true },
+          { depth: 3, strategic: true },
           // 4: Master
-          { depth: 4, strategic: true, useMemory: true }
+          { depth: 4, strategic: true }
           // 5: Grand Master
         ];
         const currentSetting = settings[adaptiveLevel];
         if (currentSetting) {
           const scoringFunction = currentSetting.strategic ? scorePositionStrategic : scorePositionTactical;
-          const memoryToUse = currentSetting.useMemory && isAiLearningEnabled ? gameMemory : { wins: [], losses: [] };
           bestMove = getBestMove(
             AI_PLAYER,
             potentialMoves,
             board,
             moveHistory,
             movesMade,
-            memoryToUse,
+            gameMemory,
             currentSetting.depth,
             scoringFunction
           );
@@ -1599,7 +1710,8 @@ var useGameLogic = () => {
   useEffect(() => {
     if (!gameOver && gameMode === "pvc" /* PvC */ && currentPlayer === AI_PLAYER && !animationInfo) {
       if (tutorialState.active) {
-        if (tutorialState.step !== 5) {
+        const currentStepConfig = TUTORIAL_CONFIG[tutorialState.step];
+        if (!currentStepConfig || currentStepConfig.advancesOnClick || currentStepConfig.action) {
           return;
         }
       }
@@ -1607,14 +1719,14 @@ var useGameLogic = () => {
       const timer = setTimeout(computerMove, 500);
       return () => clearTimeout(timer);
     }
-  }, [currentPlayer, gameOver, gameMode, computerMove, tutorialState.active, tutorialState.step, animationInfo]);
+  }, [currentPlayer, gameOver, gameMode, computerMove, tutorialState.active, tutorialState.step, animationInfo, TUTORIAL_CONFIG]);
   const gameStatus = useMemo(() => {
     const currentStepConfig = tutorialState.active && tutorialState.step >= 0 ? TUTORIAL_CONFIG[tutorialState.step] : null;
     if (currentStepConfig && !currentStepConfig.isInteractive) return "Professor Caz's Lesson";
     if (isSimulatingRef.current) return simulationStatus;
     if (gameOver) {
       if (winInfo) {
-        const winner = board[winInfo[0].r][winInfo[0].c];
+        const winner = board[winInfo[0][0].r][winInfo[0][0].c];
         if (tutorialState.active) {
           return winner === HUMAN_PLAYER ? "You did it! Tutorial Complete." : "Keep trying!";
         }
@@ -1645,7 +1757,7 @@ var useGameLogic = () => {
     let simHistory = [];
     while (isSimulatingRef.current) {
       const validSimMoves = getValidMoves(simBoard, simMovesMade);
-      if (validSimMoves.length === 0) return { history: simHistory, winner: null };
+      if (validSimMoves.length === 0) return { history: simHistory, winner: null, finalBoard: simBoard };
       let move;
       const EXPLORATION_RATE = 0.1;
       if (Math.random() < EXPLORATION_RATE) {
@@ -1658,7 +1770,7 @@ var useGameLogic = () => {
       simMovesMade++;
       simHistory.push({ player: simCurrentPlayer, r: move.r, c: move.c });
       const winner = checkWin(simCurrentPlayer, simBoard);
-      if (winner) return { history: simHistory, winner: simCurrentPlayer };
+      if (winner) return { history: simHistory, winner: simCurrentPlayer, finalBoard: simBoard };
       simCurrentPlayer = simCurrentPlayer === PLAYER_X ? PLAYER_O : PLAYER_X;
       await new Promise((resolve) => setTimeout(() => resolve(), 0));
     }
@@ -1673,13 +1785,29 @@ var useGameLogic = () => {
       if (!isSimulatingRef.current) break;
       setSimulationStatus(`Simulating Game ${i} of ${gamesToPlay}...`);
       const gameResult = await playSimulationGame(currentMemory);
-      if (gameResult) {
-        const { history, winner } = gameResult;
-        const moveString = getCanonicalMoveHistoryString(history);
-        if (winner === AI_PLAYER) {
-          if (moveString && !currentMemory.wins.some((w) => w.moves === moveString)) currentMemory.wins.push({ moves: moveString });
-        } else if (winner === HUMAN_PLAYER) {
-          if (moveString && !currentMemory.losses.some((l) => l.moves === moveString)) currentMemory.losses.push({ moves: moveString });
+      if (gameResult && gameResult.winner) {
+        const { winner, history } = gameResult;
+        const LOOKBACK_STEPS = 3;
+        const BASE_LEARNING_RATE = 1;
+        const LEARNING_RATE_DECAY = 0.5;
+        let tempHistory = [...history];
+        for (let j = 0; j < LOOKBACK_STEPS; j++) {
+          if (tempHistory.length === 0) break;
+          const tempBoard = createInitialBoard();
+          tempHistory.forEach((move) => {
+            tempBoard[move.r][move.c] = move.player;
+          });
+          const learningRate = BASE_LEARNING_RATE * Math.pow(LEARNING_RATE_DECAY, j);
+          const patternsOnBoard = extractPatternsFromBoard(tempBoard);
+          patternsOnBoard.forEach((p, key) => {
+            if (p === winner) {
+              currentMemory.patterns[key] = (currentMemory.patterns[key] || 0) + learningRate;
+            } else {
+              currentMemory.patterns[key] = (currentMemory.patterns[key] || 0) - learningRate;
+            }
+          });
+          if (tempHistory.length > 0) tempHistory.pop();
+          if (tempHistory.length > 0) tempHistory.pop();
         }
       }
     }
@@ -1691,7 +1819,7 @@ var useGameLogic = () => {
     }
     isSimulatingRef.current = false;
     setSimulationStatus("");
-    alert(`AI training complete! Memory now has ${currentMemory.wins.length} winning paths and ${currentMemory.losses.length} losing paths.`);
+    alert(`Professor Caz training complete! His brain now contains ${Object.keys(currentMemory.patterns).length} recognized patterns.`);
     _startNewGame();
   };
   const stopSimulation = () => {
@@ -1705,7 +1833,7 @@ var useGameLogic = () => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = "caz-connect-ai-memory.json";
+    a.download = "caz-connect-caz-brain.json";
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -1718,12 +1846,11 @@ var useGameLogic = () => {
     reader.onload = (e) => {
       try {
         const importedMemory = JSON.parse(e.target?.result);
-        if (importedMemory && Array.isArray(importedMemory.wins) && Array.isArray(importedMemory.losses)) {
+        if (importedMemory && importedMemory.patterns) {
           setGameMemory(importedMemory);
           localStorage.setItem("cazConnectMemory", JSON.stringify(importedMemory));
-          alert(`AI Memory imported successfully!
-Wins: ${importedMemory.wins.length}
-Losses: ${importedMemory.losses.length}`);
+          alert(`Professor Caz's Brain imported successfully!
+Recognized Patterns: ${Object.keys(importedMemory.patterns).length}`);
         } else {
           alert("Invalid memory file format.");
         }
@@ -2123,54 +2250,63 @@ var Board = ({ board, onCellClick, validMoves, lastMove, winInfo, invalidMove, i
   const boardRef = useRef2(null);
   const [lineData, setLineData] = useState3(null);
   const [isLineVisible, setIsLineVisible] = useState3(false);
-  const calculateAndSetLine = useCallback2(() => {
+  const calculateAndSetLines = useCallback2(() => {
     const boardEl = boardRef.current;
     if (!winInfo || !boardEl) {
       setLineData(null);
       return false;
     }
+    const lines = [];
     const boardRect = boardEl.getBoundingClientRect();
-    const startCell = boardEl.querySelector(`[data-row='${winInfo[0].r}'][data-col='${winInfo[0].c}']`);
-    const endCell = boardEl.querySelector(`[data-row='${winInfo[winInfo.length - 1].r}'][data-col='${winInfo[winInfo.length - 1].c}']`);
-    if (!startCell || !endCell || startCell.offsetWidth === 0) {
-      return false;
+    if (boardRect.width === 0) return false;
+    for (const line of winInfo) {
+      const startCell = boardEl.querySelector(`[data-row='${line[0].r}'][data-col='${line[0].c}']`);
+      const endCell = boardEl.querySelector(`[data-row='${line[line.length - 1].r}'][data-col='${line[line.length - 1].c}']`);
+      if (!startCell || !endCell) {
+        console.warn("Could not find cells for win line", line);
+        continue;
+      }
+      const startRect = startCell.getBoundingClientRect();
+      const endRect = endCell.getBoundingClientRect();
+      const x1 = startRect.left + startRect.width / 2 - boardRect.left;
+      const y1 = startRect.top + startRect.height / 2 - boardRect.top;
+      const x2 = endRect.left + endRect.width / 2 - boardRect.left;
+      const y2 = endRect.top + endRect.height / 2 - boardRect.top;
+      const width = Math.sqrt(Math.pow(x2 - x1, 2) + Math.pow(y2 - y1, 2));
+      const rotation = Math.atan2(y2 - y1, x2 - x1) * (180 / Math.PI);
+      lines.push({
+        x: x1,
+        y: y1,
+        width,
+        rotation
+      });
     }
-    const startRect = startCell.getBoundingClientRect();
-    const endRect = endCell.getBoundingClientRect();
-    const x1 = startRect.left + startRect.width / 2 - boardRect.left;
-    const y1 = startRect.top + startRect.height / 2 - boardRect.top;
-    const x2 = endRect.left + endRect.width / 2 - boardRect.left;
-    const y2 = endRect.top + endRect.height / 2 - boardRect.top;
-    const width = Math.sqrt(Math.pow(x2 - x1, 2) + Math.pow(y2 - y1, 2));
-    const rotation = Math.atan2(y2 - y1, x2 - x1) * (180 / Math.PI);
-    setLineData({
-      x: x1,
-      y: y1,
-      width,
-      rotation
-    });
-    return true;
+    if (lines.length > 0) {
+      setLineData(lines);
+      return true;
+    }
+    return false;
   }, [winInfo]);
   useEffect2(() => {
     if (winInfo) {
       let animationFrameId;
       const attemptToDraw = () => {
-        if (!calculateAndSetLine()) {
+        if (!calculateAndSetLines()) {
           animationFrameId = requestAnimationFrame(attemptToDraw);
         }
       };
       const timerId = setTimeout(attemptToDraw, 50);
-      window.addEventListener("resize", calculateAndSetLine);
+      window.addEventListener("resize", calculateAndSetLines);
       return () => {
         clearTimeout(timerId);
         cancelAnimationFrame(animationFrameId);
-        window.removeEventListener("resize", calculateAndSetLine);
+        window.removeEventListener("resize", calculateAndSetLines);
       };
     } else {
       setLineData(null);
       setIsLineVisible(false);
     }
-  }, [winInfo, calculateAndSetLine]);
+  }, [winInfo, calculateAndSetLines]);
   useEffect2(() => {
     if (lineData) {
       const animationTimer = setTimeout(() => {
@@ -2183,7 +2319,7 @@ var Board = ({ board, onCellClick, validMoves, lastMove, winInfo, invalidMove, i
   const showValidMovesHighlight = gameMode === "pvc" /* PvC */ && adaptiveLevel < 2;
   const winPiecesSet = useMemo2(() => {
     if (!winInfo) return /* @__PURE__ */ new Set();
-    return new Set(winInfo.map((m) => `${m.r}-${m.c}`));
+    return new Set(winInfo.flat().map((m) => `${m.r}-${m.c}`));
   }, [winInfo]);
   const tutorialHighlightedCells = useMemo2(() => {
     if (!tutorialHighlight) return /* @__PURE__ */ new Set();
@@ -2244,12 +2380,12 @@ var Board = ({ board, onCellClick, validMoves, lastMove, winInfo, invalidMove, i
           /* @__PURE__ */ jsx5("feMergeNode", { in: "SourceGraphic" })
         ] })
       ] }) }),
-      /* @__PURE__ */ jsx5("g", { transform: `translate(${lineData.x}, ${lineData.y}) rotate(${lineData.rotation})`, children: /* @__PURE__ */ jsx5(
+      lineData.map((line, index) => /* @__PURE__ */ jsx5("g", { transform: `translate(${line.x}, ${line.y}) rotate(${line.rotation})`, children: /* @__PURE__ */ jsx5(
         "rect",
         {
           x: "0",
           y: "-2.5",
-          width: isLineVisible ? lineData.width : 0,
+          width: isLineVisible ? line.width : 0,
           height: "5",
           rx: "2.5",
           ry: "2.5",
@@ -2260,7 +2396,7 @@ var Board = ({ board, onCellClick, validMoves, lastMove, winInfo, invalidMove, i
             transformOrigin: "center"
           }
         }
-      ) })
+      ) }, index))
     ] })
   ] });
 };
@@ -2381,17 +2517,21 @@ var ReleaseNotesModal = ({ onClose }) => {
           className: "component-panel rounded-lg p-6 max-w-lg w-full text-center relative transform animate-pop-in-modal max-h-[90vh] flex flex-col",
           onClick: (e) => e.stopPropagation(),
           children: [
-            /* @__PURE__ */ jsx7("h2", { className: "text-3xl font-bold title-font mb-4", style: { color: "var(--text-header)" }, children: "Version 1.1.2 Patch Notes" }),
+            /* @__PURE__ */ jsx7("h2", { className: "text-3xl font-bold title-font mb-4", style: { color: "var(--text-header)" }, children: "Version 1.1.3 Patch Notes" }),
             /* @__PURE__ */ jsxs6("div", { className: "overflow-y-auto text-left space-y-4 text-base pr-2 -mr-2", children: [
-              /* @__PURE__ */ jsx7("p", { children: "This is a quality-of-life patch focused on improving the online multiplayer experience." }),
+              /* @__PURE__ */ jsx7("p", { children: "This patch brings some fun interactive elements to the achievements screen and polishes up a few rough edges." }),
               /* @__PURE__ */ jsxs6("div", { children: [
-                /* @__PURE__ */ jsx7("h3", { className: "font-bold text-lg", style: { color: "var(--text-panel)" }, children: "Online Multiplayer Update" }),
-                /* @__PURE__ */ jsx7("ul", { className: "list-disc list-inside space-y-2 mt-2 text-sm", children: /* @__PURE__ */ jsxs6("li", { children: [
-                  /* @__PURE__ */ jsx7("strong", { children: "Smarter Game Codes:" }),
-                  " When starting a new online game as Player X, the shareable game code will now only be generated *after* you make your first move. This makes the process more intuitive and prevents sharing codes for empty boards."
-                ] }) })
+                /* @__PURE__ */ jsx7("h3", { className: "font-bold text-lg", style: { color: "var(--text-panel)" }, children: "Interactive Achievements" }),
+                /* @__PURE__ */ jsx7("ul", { className: "list-disc list-inside space-y-2 mt-2 text-sm", children: /* @__PURE__ */ jsx7("li", { children: "You can now click on locked achievements! Professor Caz will give you a cryptic hint about how to unlock them. Happy hunting!" }) })
               ] }),
-              /* @__PURE__ */ jsx7("p", { className: "pt-2", children: "Thank you for your feedback! It helps make the game better for everyone." })
+              /* @__PURE__ */ jsxs6("div", { children: [
+                /* @__PURE__ */ jsx7("h3", { className: "font-bold text-lg", style: { color: "var(--text-panel)" }, children: "Bug Fixes & Polish" }),
+                /* @__PURE__ */ jsxs6("ul", { className: "list-disc list-inside space-y-2 mt-2 text-sm", children: [
+                  /* @__PURE__ */ jsx7("li", { children: 'Fixed a minor visual glitch where the "invalid move" indicator was sometimes not triggering correctly on rapid clicks.' }),
+                  /* @__PURE__ */ jsx7("li", { children: "Slightly improved the responsiveness of the UI on smaller devices." })
+                ] })
+              ] }),
+              /* @__PURE__ */ jsx7("p", { className: "pt-2", children: "Thanks for playing and keep the feedback coming!" })
             ] }),
             /* @__PURE__ */ jsx7("div", { className: "mt-6", children: /* @__PURE__ */ jsx7(
               "button",
@@ -2470,7 +2610,7 @@ var Controls = ({
   const fileInputRef = useRef4(null);
   const [activeTab, setActiveTab] = useState5("setup");
   const [showReleaseNotesModal, setShowReleaseNotesModal] = useState5(false);
-  const appVersion = "1.1.2";
+  const appVersion = "1.1.3";
   const [tempPlayerName, setTempPlayerName] = useState5(playerName);
   const [tempPlayerPiece, setTempPlayerPiece] = useState5(playerPiece);
   const [tempPlayerOName, setTempPlayerOName] = useState5(playerOName);
@@ -2548,7 +2688,7 @@ var Controls = ({
               onClick: () => setGameMode("pvc" /* PvC */),
               disabled: allDisabled,
               className: `toggle-option ${gameMode === "pvc" /* PvC */ ? "active" : ""}`,
-              children: "vs. AI"
+              children: "vs. Professor Caz"
             }
           ),
           /* @__PURE__ */ jsx8(
@@ -2802,14 +2942,14 @@ var Controls = ({
           disabled: allDisabled,
           className: "flex items-center justify-between w-full text-left disabled:opacity-50",
           children: [
-            /* @__PURE__ */ jsx8("span", { className: "text-sm font-bold uppercase tracking-wider section-header", children: "Professor's Lab" }),
+            /* @__PURE__ */ jsx8("span", { className: "text-sm font-bold uppercase tracking-wider section-header", children: "Professor's Lab (Training)" }),
             /* @__PURE__ */ jsx8("svg", { className: `w-5 h-5 transition-transform duration-200 lab-arrow ${isLabOpen ? "transform rotate-180" : ""}`, fill: "none", stroke: "currentColor", viewBox: "0 0 24 24", xmlns: "http://www.w3.org/2000/svg", children: /* @__PURE__ */ jsx8("path", { strokeLinecap: "round", strokeLinejoin: "round", strokeWidth: "2", d: "M19 9l-7 7-7-7" }) })
           ]
         }
       ),
       isLabOpen && /* @__PURE__ */ jsxs7("div", { className: "flex flex-col gap-2.5 w-full mt-2 animate-fade-in", children: [
         /* @__PURE__ */ jsxs7("div", { className: "control-row", children: [
-          /* @__PURE__ */ jsx8("label", { htmlFor: "ai-learning-check", className: "control-label", title: "Allow AI to save game results to its memory on higher difficulties.", children: "Allow AI to Learn:" }),
+          /* @__PURE__ */ jsx8("label", { htmlFor: "ai-learning-check", className: "control-label", title: "Allow Professor Caz to save game results to its memory on higher difficulties.", children: "Allow Professor Caz to Learn:" }),
           /* @__PURE__ */ jsx8(
             "button",
             {
@@ -2839,10 +2979,10 @@ var Controls = ({
             }
           )
         ] }),
-        !isSimulating ? /* @__PURE__ */ jsx8("button", { onClick: () => onStartSimulation(simGames), disabled: isTutorialActive, className: "control-button secondary-button bg-green-500 text-white", children: "Start AI Training" }) : /* @__PURE__ */ jsx8("button", { onClick: onStopSimulation, className: "control-button primary-button", children: "Stop Training" }),
+        !isSimulating ? /* @__PURE__ */ jsx8("button", { onClick: () => onStartSimulation(simGames), disabled: isTutorialActive, className: "control-button secondary-button bg-green-500 text-white", children: "Start Training" }) : /* @__PURE__ */ jsx8("button", { onClick: onStopSimulation, className: "control-button primary-button", children: "Stop Training" }),
         /* @__PURE__ */ jsxs7("div", { className: "flex gap-2.5", children: [
-          /* @__PURE__ */ jsx8("button", { onClick: handleImportClick, disabled: allDisabled, className: "control-button secondary-button flex-grow", children: "Import AI" }),
-          /* @__PURE__ */ jsx8("button", { onClick: onExportMemory, disabled: allDisabled, className: "control-button secondary-button flex-grow", children: "Export AI" })
+          /* @__PURE__ */ jsx8("button", { onClick: handleImportClick, disabled: allDisabled, className: "control-button secondary-button flex-grow", children: "Import Brain" }),
+          /* @__PURE__ */ jsx8("button", { onClick: onExportMemory, disabled: allDisabled, className: "control-button secondary-button flex-grow", children: "Export Brain" })
         ] }),
         /* @__PURE__ */ jsx8("input", { type: "file", ref: fileInputRef, onChange: handleFileChange, accept: ".json", className: "hidden" })
       ] })
@@ -2980,11 +3120,11 @@ import { useState as useState7, useCallback as useCallback3, useMemo as useMemo3
 import { jsx as jsx12, jsxs as jsxs11 } from "react/jsx-runtime";
 var ShareIcon = ({ className }) => /* @__PURE__ */ jsx12("svg", { xmlns: "http://www.w3.org/2000/svg", viewBox: "0 0 24 24", fill: "currentColor", className, children: /* @__PURE__ */ jsx12("path", { d: "M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92 1.61 0 2.92-1.31 2.92-2.92s-1.31-2.92-2.92-2.92z" }) });
 var GameOverModal = ({ board, winInfo, gameMode, onNewGame, onClose, stats, adaptiveLevel, isLabUnlocked, playerName, playerOName, levelChange }) => {
-  const winner = winInfo ? board[winInfo[0].r][winInfo[0].c] : null;
+  const winner = winInfo ? board[winInfo[0][0].r][winInfo[0][0].c] : null;
   const [copySuccess, setCopySuccess] = useState7(false);
   const winPiecesSet = useMemo3(() => {
     if (!winInfo) return /* @__PURE__ */ new Set();
-    return new Set(winInfo.map((m) => `${m.r}-${m.c}`));
+    return new Set(winInfo.flat().map((m) => `${m.r}-${m.c}`));
   }, [winInfo]);
   let title;
   if (winner) {
@@ -3108,7 +3248,7 @@ var GameOverModal = ({ board, winInfo, gameMode, onNewGame, onClose, stats, adap
                 notification.text
               ] }),
               gameMode === "pvc" /* PvC */ && /* @__PURE__ */ jsxs11("div", { className: "my-6 text-left", children: [
-                /* @__PURE__ */ jsx12("h3", { className: "text-lg font-bold mb-3 text-center section-header", children: "Player Records vs. AI" }),
+                /* @__PURE__ */ jsx12("h3", { className: "text-lg font-bold mb-3 text-center section-header", children: "Player Records vs. Professor Caz" }),
                 /* @__PURE__ */ jsx12("div", { className: "space-y-3", children: LEVEL_NAMES.map((levelName, i) => {
                   const levelStats = stats[i] || { wins: 0, losses: 0 };
                   const totalGames = levelStats.wins + levelStats.losses;
@@ -3221,7 +3361,7 @@ var RulesModal = ({ onClose, onStartTutorial }) => {
                 /* @__PURE__ */ jsx13("h3", { className: "font-bold text-lg", style: { color: "var(--text-panel)" }, children: /* @__PURE__ */ jsx13("strong", { children: 'The "Gravity Connection" Rule' }) }),
                 /* @__PURE__ */ jsx13("p", { children: "This is the core rule! You can only place a piece in a square that has a straight, unbroken line of pieces connecting it to one of the outer walls." })
               ] }),
-              /* @__PURE__ */ jsx13("div", { children: /* @__PURE__ */ jsx13("p", { className: "text-sm opacity-80 text-center mt-6", children: "Valid moves are highlighted on the board for the first two AI levels to help you learn." }) })
+              /* @__PURE__ */ jsx13("div", { children: /* @__PURE__ */ jsx13("p", { className: "text-sm opacity-80 text-center mt-6", children: "Valid moves are highlighted on the board for the first two Professor Caz levels to help you learn." }) })
             ] }),
             /* @__PURE__ */ jsxs12("div", { className: "grid grid-cols-2 gap-2.5 mt-4", children: [
               /* @__PURE__ */ jsx13(
@@ -3284,6 +3424,7 @@ var PlayerStatsModal = ({ onClose, detailedStats, unlockedAchievements, aiStats,
     return Math.round(detailedStats.totalMoves / detailedStats.totalGamesVsAi);
   }, [detailedStats.totalGamesVsAi, detailedStats.totalMoves]);
   const achievementToShow = selectedAchievement ? ACHIEVEMENTS[selectedAchievement] : null;
+  const isSelectedAchievementUnlocked = selectedAchievement ? unlockedAchievements.includes(selectedAchievement) : false;
   return /* @__PURE__ */ jsx14(
     "div",
     {
@@ -3305,9 +3446,10 @@ var PlayerStatsModal = ({ onClose, detailedStats, unlockedAchievements, aiStats,
               /* @__PURE__ */ jsx14("button", { className: `tab-button ${activeTab === "stats" ? "active" : ""}`, onClick: () => setActiveTab("stats"), children: "Statistics" })
             ] }) : /* @__PURE__ */ jsx14("div", { className: "border-b-2", style: { borderColor: "var(--panel-border)" } }),
             /* @__PURE__ */ jsx14("div", { className: "overflow-y-auto mt-4 pr-2 -mr-2", children: selectedAchievement && achievementToShow ? /* @__PURE__ */ jsxs13("div", { className: "text-center p-4 animate-fade-in-fast flex flex-col items-center gap-4", children: [
-              /* @__PURE__ */ jsx14("span", { className: "text-7xl", children: achievementToShow.icon }),
+              /* @__PURE__ */ jsx14("span", { className: `text-7xl transition-all ${!isSelectedAchievementUnlocked ? "filter grayscale" : ""}`, children: achievementToShow.icon }),
               /* @__PURE__ */ jsx14("h3", { className: "text-2xl font-bold title-font", style: { color: "var(--text-header)" }, children: achievementToShow.name }),
-              /* @__PURE__ */ jsx14("p", { className: "text-base", children: achievementToShow.description })
+              /* @__PURE__ */ jsx14("p", { className: "text-base italic opacity-90", children: isSelectedAchievementUnlocked ? achievementToShow.description : achievementToShow.lockedDescription || "Keep playing to unlock this secret achievement!" }),
+              !isSelectedAchievementUnlocked && achievementToShow.lockedDescription && /* @__PURE__ */ jsx14("p", { className: "text-xs mt-2", children: 'Professor Caz says: "A true master finds their own path..."' })
             ] }) : /* @__PURE__ */ jsxs13(Fragment, { children: [
               activeTab === "achievements" && /* @__PURE__ */ jsx14("div", { className: "grid grid-cols-2 sm:grid-cols-3 gap-4 text-center animate-fade-in-fast", children: Object.keys(ACHIEVEMENTS).map((id) => {
                 const achievement = ACHIEVEMENTS[id];
@@ -3316,12 +3458,8 @@ var PlayerStatsModal = ({ onClose, detailedStats, unlockedAchievements, aiStats,
                 return /* @__PURE__ */ jsxs13(
                   "button",
                   {
-                    onClick: () => {
-                      if (isUnlocked) {
-                        setSelectedAchievement(id);
-                      }
-                    },
-                    className: `p-4 rounded-lg flex flex-col items-center justify-start gap-2 transition-all duration-300 text-left ${isUnlocked ? "opacity-100 cursor-pointer" : "opacity-40 filter grayscale cursor-default"}`,
+                    onClick: () => setSelectedAchievement(id),
+                    className: `p-4 rounded-lg flex flex-col items-center justify-start gap-2 transition-all duration-300 text-left cursor-pointer ${isUnlocked ? "opacity-100" : "opacity-50 filter grayscale"}`,
                     style: { backgroundColor: "rgba(0,0,0,0.05)" },
                     "aria-label": `View details for ${achievement.name}`,
                     children: [
