@@ -39,17 +39,30 @@ self.addEventListener('install', event => {
   );
 });
 
-// Serve cached content when offline
+// Serve cached content when offline, and cache new requests
 self.addEventListener('fetch', event => {
   event.respondWith(
     caches.match(event.request)
-      .then(response => {
-        // Cache hit - return response
-        if (response) {
-          return response;
+      .then(cachedResponse => {
+        // It's in the cache. Return it.
+        if (cachedResponse) {
+          return cachedResponse;
         }
-        // Not in cache - fetch from network
-        return fetch(event.request);
+
+        // Not in cache. Go to the network.
+        return fetch(event.request).then(networkResponse => {
+            // If we got a good response, cache it.
+            if (networkResponse && networkResponse.status === 200) {
+              const responseToCache = networkResponse.clone();
+              caches.open(CACHE_NAME).then(cache => {
+                if (!event.request.url.startsWith('chrome-extension://')) {
+                    cache.put(event.request, responseToCache);
+                }
+              });
+            }
+            return networkResponse;
+          }
+        );
       })
   );
 });

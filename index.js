@@ -3660,6 +3660,10 @@ var App = () => {
   useEffect5(() => {
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("./sw.js").then((registration) => {
+        if (registration.waiting) {
+          setWaitingWorker(registration.waiting);
+          setShowUpdatePrompt(true);
+        }
         registration.addEventListener("updatefound", () => {
           const newWorker = registration.installing;
           if (newWorker) {
