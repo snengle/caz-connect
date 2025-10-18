@@ -3,7 +3,7 @@ import React9 from "react";
 import ReactDOM from "react-dom/client";
 
 // App.tsx
-import { useEffect as useEffect5, useState as useState9, useRef as useRef5 } from "react";
+import { useEffect as useEffect6, useState as useState9, useRef as useRef5 } from "react";
 
 // hooks/useGameLogic.ts
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
@@ -14,7 +14,6 @@ var PLAYER_X = "X" /* X */;
 var PLAYER_O = "O" /* O */;
 var AI_PLAYER = "O" /* O */;
 var HUMAN_PLAYER = "X" /* X */;
-var LEVEL_NAMES = ["Beginner", "Novice", "Intermediate", "Expert", "Master", "Grand Master"];
 var POSITIONAL_VALUE_MAP = [
   [3, 4, 5, 7, 7, 5, 4, 3],
   [4, 6, 8, 10, 10, 8, 6, 4],
@@ -40,43 +39,171 @@ var ACHIEVEMENTS = {
     name: "On Fire!",
     description: "Achieve a 5-game win streak against Professor Caz on Intermediate or higher.",
     lockedDescription: "??????????",
+    lockedHint: "Consistency is the hallmark of a true master. Can you prove your skill time and time again?",
     icon: "\u{1F525}"
   },
   BEAT_GRAND_MASTER: {
     name: "Master Mind",
     description: "Defeat the 'Grand Master' level Professor Caz.",
     lockedDescription: "??????????",
+    lockedHint: "Only by defeating the ultimate challenge can you prove your own mastery.",
     icon: "\u{1F9E0}"
   },
   GRAVITY_MASTER: {
     name: "Gravity Master",
     description: "Win a game with a connection of 6 or more pieces on Intermediate or higher.",
     lockedDescription: "??????????",
+    lockedHint: "Victory is one thing, but victory with style and a grand design? That is true genius.",
     icon: "\u269B\uFE0F"
   },
   LAB_UNLOCKED: {
     name: "Lab Access",
     description: "Unlock the secrets of the Professor's Lab.",
     lockedDescription: "??????????",
+    lockedHint: "Some secrets are hidden in plain sight, waiting for the curious mind to play with the world around them.",
     icon: "\u{1F52C}"
   },
   GRAND_TOUR: {
     name: "Grand Tour",
     description: "Win against every Professor Caz level from Beginner to Grand Master.",
     icon: "\u{1F5FA}\uFE0F",
-    lockedDescription: "??????????"
+    lockedDescription: "??????????",
+    lockedHint: "To be the best, you must defeat the best... all of them."
   },
   LONG_GAME: {
     name: "The Long Game",
     description: "Win a match that lasts 40 or more moves.",
     icon: "\u23F3",
-    lockedDescription: "??????????"
+    lockedDescription: "??????????",
+    lockedHint: "Patience and endurance can often outmaneuver a swift and reckless attack."
   },
   CUSTOMIZED_PROFILE: {
     name: "Tinkerer",
     description: "Personalize your profile by changing both your name and piece.",
     icon: "\u{1F3A8}",
-    lockedDescription: "??????????"
+    lockedDescription: "??????????",
+    lockedHint: "An artist's first work is a self-portrait. Make this game your own."
+  }
+};
+
+// ai-settings.ts
+var AI_LEVELS = [
+  // Level 0
+  { name: "Beginner", depth: 0, strategic: false, description: "Makes weighted random moves, but will block/take immediate wins." },
+  // Level 1
+  { name: "Novice", depth: 1, strategic: false, probabilities: [0.6, 0.3, 0.1], description: "Starts to recognize simple threats, but is still quite predictable." },
+  // Level 2
+  { name: "Intermediate", depth: 2, strategic: false, probabilities: [0.85, 0.1, 0.05], description: "Looks two moves ahead. A solid opponent for casual players." },
+  // Level 3
+  { name: "Expert", depth: 3, strategic: true, description: "Uses positional strategy and looks three moves ahead. Very challenging." },
+  // Level 4
+  { name: "Master", depth: 4, strategic: true, description: "A refined version of Expert with deeper tactical awareness." },
+  // Level 5
+  { name: "Grand Master", depth: 5, strategic: true, description: "A formidable opponent that sees deep into the game and learns from its mistakes." }
+];
+
+// ai-messages.ts
+var THEME_AWARE_MASCOT_MESSAGES = {
+  shared: {
+    gameStart: [
+      "A new challenge begins!",
+      "Let's have a grand game!",
+      "Ready your wits!",
+      "May the best mind win."
+    ],
+    playerCreatesThreat: [
+      "Ooh, a clever setup!",
+      "Aha, I see what you're planning.",
+      "A palpable threat...",
+      "Professor Caz is evaluating your threat...",
+      "A bold move! Let's see if it pays off."
+    ],
+    playerBlocksThreat: [
+      "Hmph, a shrewd block!",
+      "My brilliant plan, foiled!",
+      "Well played. That was a critical spot.",
+      "You've anticipated my strategy!"
+    ],
+    aiCreatesThreat: [
+      "Behold my masterful strategy!",
+      "Your move, I believe.",
+      "Let's see you get out of this one.",
+      "The board is my canvas."
+    ],
+    aiBlocksThreat: [
+      "Not so fast!",
+      "I'm afraid I can't let you do that.",
+      "A necessary precaution.",
+      "You'll have to be cleverer than that!"
+    ],
+    playerWins: [
+      "Astounding! You've bested me!",
+      "A well-deserved victory!",
+      "You are a true master of the craft!",
+      "My calculations were... flawed. Congratulations!"
+    ],
+    aiWins: [
+      "Checkmate... or rather, Connect-Four-mate!",
+      "A logical conclusion.",
+      "Better luck next time, my friend.",
+      "A victory for science! And for me.",
+      "I won!"
+    ],
+    draw: [
+      "A stalemate! A battle of equals.",
+      "It seems we are perfectly matched.",
+      "An impenetrable defense on both sides!"
+    ]
+  },
+  space: {
+    gameStart: [
+      "Engage!",
+      "Let the Wookiee win.",
+      "The board is set. The pieces are moving.",
+      "Time is a companion that goes with us on a journey."
+    ],
+    playerCreatesThreat: [
+      "It's a trap!",
+      "I've got a bad feeling about this.",
+      "Fascinating.",
+      "The odds of that move succeeding are approximately 3,720 to 1.",
+      "I sense a disturbance in the Force."
+    ],
+    playerBlocksThreat: [
+      "The Force is strong with this one.",
+      "Clever girl.",
+      "I find your lack of faith disturbing.",
+      "That is... not logical."
+    ],
+    aiCreatesThreat: [
+      "I have you now!",
+      "Resistance is futile.",
+      "All your base are belong to us.",
+      "There is no escape."
+    ],
+    aiBlocksThreat: [
+      "I'm afraid I can't let you do that, Dave.",
+      "Never tell me the odds!",
+      "This is the way.",
+      "By my calculations, your path is blocked."
+    ],
+    playerWins: [
+      "The student has become the master.",
+      "Live long and prosper.",
+      "So long, and thanks for all the fish.",
+      "I have been, and always shall be, your friend."
+    ],
+    aiWins: [
+      "I am inevitable.",
+      "The needs of the many outweigh the needs of the few.",
+      "Don't Panic.",
+      "I've seen things you people wouldn't believe..."
+    ],
+    draw: [
+      "A paradox. We must not disrupt the timeline.",
+      "The universe is in balance.",
+      "The board is in a state of quantum superposition."
+    ]
   }
 };
 
@@ -295,6 +422,13 @@ var useGameLogic = () => {
       return true;
     }
   });
+  const [isScreenShakeEnabled, setIsScreenShakeEnabled] = useState(() => {
+    try {
+      return localStorage.getItem("cazConnectScreenShakeEnabled") === "true";
+    } catch {
+      return false;
+    }
+  });
   const [isMuted, setIsMuted] = useState(() => {
     try {
       return localStorage.getItem("cazConnectMuted") === "true";
@@ -320,7 +454,11 @@ var useGameLogic = () => {
   const [showRulesModal, setShowRulesModal] = useState(false);
   const [showUnlockModal, setShowUnlockModal] = useState(false);
   const [showGameOverModal, setShowGameOverModal] = useState(false);
+  const [highlightedPath, setHighlightedPath] = useState([]);
+  const [isShaking, setIsShaking] = useState(false);
   const [confirmAction, setConfirmAction] = useState(null);
+  const [mascotMessage, setMascotMessage] = useState("");
+  const mascotMessageTimer = useRef(null);
   const [adaptiveLevel, setAdaptiveLevel] = useState(() => {
     try {
       const saved = localStorage.getItem("cazConnectAdaptiveLevel");
@@ -419,6 +557,13 @@ var useGameLogic = () => {
   });
   const [onlineRole, setOnlineRoleInternal] = useState(null);
   const [tutorialState, setTutorialState] = useState({ active: false, step: -1 });
+  const isForfeitable = useMemo(() => {
+    if (gameOver) return false;
+    if (gameMode === "pvc" /* PvC */) {
+      return moveHistory.some((move) => move.player === HUMAN_PLAYER);
+    }
+    return movesMade > 0;
+  }, [gameOver, gameMode, moveHistory, movesMade]);
   const grantAchievement = useCallback((id) => {
     setUnlockedAchievements((prev) => {
       if (prev.includes(id)) {
@@ -484,6 +629,13 @@ var useGameLogic = () => {
       console.error("Failed to save haptic preference", e);
     }
   }, [isHapticEnabled]);
+  useEffect(() => {
+    try {
+      localStorage.setItem("cazConnectScreenShakeEnabled", String(isScreenShakeEnabled));
+    } catch (e) {
+      console.error("Failed to save screen shake preference", e);
+    }
+  }, [isScreenShakeEnabled]);
   useEffect(() => {
     try {
       localStorage.setItem("cazConnectAdaptiveLevel", String(adaptiveLevel));
@@ -568,6 +720,14 @@ var useGameLogic = () => {
       }
     }
   }, [playerName, playerPiece, unlockedAchievements, grantAchievement]);
+  useEffect(() => {
+    if (!unlockedAchievements.includes("GRAND_TOUR")) {
+      const requiredLevels = [0, 1, 2, 3, 4, 5];
+      if (requiredLevels.every((level) => detailedStats.levelsBeaten.includes(level))) {
+        grantAchievement("GRAND_TOUR");
+      }
+    }
+  }, [detailedStats.levelsBeaten, unlockedAchievements, grantAchievement]);
   const placeSound = useRef(null);
   const winSound = useRef(null);
   const badMoveSound = useRef(null);
@@ -650,6 +810,18 @@ var useGameLogic = () => {
         localStorage.setItem("cazConnectAnimationEnabled", String(newValue));
       } catch (error) {
         console.error("Failed to save animation preference to localStorage", error);
+      }
+      return newValue;
+    });
+  }, [playSound]);
+  const toggleScreenShakeEnabled = useCallback(() => {
+    playSound("uiclick");
+    setIsScreenShakeEnabled((prev) => {
+      const newValue = !prev;
+      try {
+        localStorage.setItem("cazConnectScreenShakeEnabled", String(newValue));
+      } catch (error) {
+        console.error("Failed to save screen shake preference to localStorage", error);
       }
       return newValue;
     });
@@ -743,6 +915,79 @@ var useGameLogic = () => {
       });
     }
   }, [deferredInstallPrompt, playSound]);
+  const getRandomMascotMessage = useCallback((category) => {
+    const sharedMessages = THEME_AWARE_MASCOT_MESSAGES.shared[category] || [];
+    const themeMessages = theme === "space" ? THEME_AWARE_MASCOT_MESSAGES.space[category] || [] : [];
+    const allMessages = [...sharedMessages, ...themeMessages];
+    if (allMessages.length === 0) return "";
+    return allMessages[Math.floor(Math.random() * allMessages.length)];
+  }, [theme]);
+  const setMascotMessageWithTimeout = useCallback((message, duration = 4e3) => {
+    if (mascotMessageTimer.current) {
+      clearTimeout(mascotMessageTimer.current);
+    }
+    setMascotMessage(message);
+    mascotMessageTimer.current = window.setTimeout(() => {
+      setMascotMessage("");
+    }, duration);
+  }, []);
+  const analyzeMoveForMascot = useCallback((move, boardAfterMove, playerWhoMoved) => {
+    const opponent = playerWhoMoved === PLAYER_X ? PLAYER_O : PLAYER_X;
+    const boardBeforeMove = boardAfterMove.map((row) => [...row]);
+    boardBeforeMove[move.r][move.c] = null;
+    const directions = [[0, 1], [1, 0], [1, 1], [1, -1]];
+    for (const [dr, dc] of directions) {
+      for (let i = -3; i <= 0; i++) {
+        const window2 = [];
+        const rStart = move.r + i * dr;
+        const cStart = move.c + i * dc;
+        let isValidWindow = true;
+        for (let j = 0; j < 4; j++) {
+          const r = rStart + j * dr;
+          const c = cStart + j * dc;
+          if (r < 0 || r >= BOARD_SIZE || c < 0 || c >= BOARD_SIZE) {
+            isValidWindow = false;
+            break;
+          }
+          if (r === move.r && c === move.c) {
+            window2.push(null);
+          } else {
+            window2.push(boardBeforeMove[r][c]);
+          }
+        }
+        if (!isValidWindow) continue;
+        const opponentCount = window2.filter((p) => p === opponent).length;
+        const emptyCount = window2.filter((p) => p === null).length;
+        if (opponentCount === 3 && emptyCount === 1) {
+          return getRandomMascotMessage(playerWhoMoved === HUMAN_PLAYER ? "playerBlocksThreat" : "aiBlocksThreat");
+        }
+      }
+    }
+    for (const [dr, dc] of directions) {
+      for (let i = -3; i <= 0; i++) {
+        const window2 = [];
+        const rStart = move.r + i * dr;
+        const cStart = move.c + i * dc;
+        let isValidWindow = true;
+        for (let j = 0; j < 4; j++) {
+          const r = rStart + j * dr;
+          const c = cStart + j * dc;
+          if (r < 0 || r >= BOARD_SIZE || c < 0 || c >= BOARD_SIZE) {
+            isValidWindow = false;
+            break;
+          }
+          window2.push(boardAfterMove[r][c]);
+        }
+        if (!isValidWindow) continue;
+        const playerCount = window2.filter((p) => p === playerWhoMoved).length;
+        const emptyCount = window2.filter((p) => p === null).length;
+        if (playerCount === 3 && emptyCount === 1) {
+          return getRandomMascotMessage(playerWhoMoved === HUMAN_PLAYER ? "playerCreatesThreat" : "aiCreatesThreat");
+        }
+      }
+    }
+    return null;
+  }, [getRandomMascotMessage]);
   useEffect(() => {
     const loadMemory = async () => {
       try {
@@ -788,7 +1033,10 @@ var useGameLogic = () => {
     setAnimationInfo(null);
     setShowGameOverModal(false);
     setLevelChange(null);
-  }, []);
+    if (gameMode === "pvc" /* PvC */) {
+      setMascotMessageWithTimeout(getRandomMascotMessage("gameStart"));
+    }
+  }, [gameMode, setMascotMessageWithTimeout, getRandomMascotMessage]);
   const _startNewGame = useCallback(() => {
     playSound("uiclick");
     masterReset(nextStarter);
@@ -808,16 +1056,16 @@ var useGameLogic = () => {
         newStats[adaptiveLevel] = levelStat;
         return newStats;
       });
-      let newCurrentWinStreak = detailedStats.currentWinStreak || 0;
-      if (winner === HUMAN_PLAYER) {
-        newCurrentWinStreak++;
-      } else {
-        newCurrentWinStreak = 0;
-      }
-      if (newCurrentWinStreak >= 5 && adaptiveLevel >= 2) {
-        grantAchievement("WIN_STREAK_5");
-      }
       setDetailedStats((prev) => {
+        let newCurrentWinStreak = prev.currentWinStreak || 0;
+        if (winner === HUMAN_PLAYER) {
+          newCurrentWinStreak++;
+        } else {
+          newCurrentWinStreak = 0;
+        }
+        if (newCurrentWinStreak >= 5 && adaptiveLevel >= 2) {
+          grantAchievement("WIN_STREAK_5");
+        }
         const newStats = { ...prev };
         if (!newStats.levelsBeaten) newStats.levelsBeaten = [];
         newStats.totalGamesVsAi += 1;
@@ -842,49 +1090,46 @@ var useGameLogic = () => {
         if (history.length >= 40) {
           grantAchievement("LONG_GAME");
         }
-        const requiredLevels = [0, 1, 2, 3, 4, 5];
-        const hasAllLevels = requiredLevels.every((level) => detailedStats.levelsBeaten.includes(level));
-        if (hasAllLevels) {
-          grantAchievement("GRAND_TOUR");
-        }
       }
       if (autoAdjustLevel) {
-        const PROMOTION_THRESHOLD = 2.5;
-        const DEMOTION_THRESHOLD = -2.5;
-        const QUICK_GAME_MOVES = 20;
-        const LONG_GAME_MOVES = 35;
-        let score = 0;
-        if (winner === HUMAN_PLAYER) {
-          score = 1;
-        } else if (winner === AI_PLAYER) {
-          score = -1;
-        }
-        if (score !== 0) {
-          const gameLength = history.length;
-          if (gameLength < QUICK_GAME_MOVES) {
-            score *= 1.5;
-          } else if (gameLength > LONG_GAME_MOVES) {
-            score *= 0.75;
+        setPerformancePoints((prevPoints) => {
+          const PROMOTION_THRESHOLD = 2.5;
+          const DEMOTION_THRESHOLD = -2.5;
+          const QUICK_GAME_MOVES = 20;
+          const LONG_GAME_MOVES = 35;
+          let score = 0;
+          if (winner === HUMAN_PLAYER) {
+            score = 1;
+          } else if (winner === AI_PLAYER) {
+            score = -1;
           }
-        }
-        const newPoints = performancePoints + score;
-        if (newPoints >= PROMOTION_THRESHOLD) {
-          setAdaptiveLevel((l) => {
-            const newLevel = Math.min(l + 1, 5);
-            if (newLevel > l) setLevelChange("promoted");
-            return newLevel;
-          });
-          setPerformancePoints(0);
-        } else if (newPoints <= DEMOTION_THRESHOLD) {
-          setAdaptiveLevel((l) => {
-            const newLevel = Math.max(l - 1, 0);
-            if (newLevel < l) setLevelChange("demoted");
-            return newLevel;
-          });
-          setPerformancePoints(0);
-        } else {
-          setPerformancePoints(newPoints);
-        }
+          if (score !== 0) {
+            const gameLength = history.length;
+            if (gameLength < QUICK_GAME_MOVES) {
+              score *= 1.5;
+            } else if (gameLength > LONG_GAME_MOVES) {
+              score *= 0.75;
+            }
+          }
+          const newPoints = prevPoints + score;
+          if (newPoints >= PROMOTION_THRESHOLD) {
+            setAdaptiveLevel((l) => {
+              const newLevel = Math.min(l + 1, AI_LEVELS.length - 1);
+              if (newLevel > l) setLevelChange("promoted");
+              return newLevel;
+            });
+            return 0;
+          } else if (newPoints <= DEMOTION_THRESHOLD) {
+            setAdaptiveLevel((l) => {
+              const newLevel = Math.max(l - 1, 0);
+              if (newLevel < l) setLevelChange("demoted");
+              return newLevel;
+            });
+            return 0;
+          } else {
+            return newPoints;
+          }
+        });
       }
     }
     if (adaptiveLevel >= 4 && isAiLearningEnabled) {
@@ -943,7 +1188,7 @@ var useGameLogic = () => {
         });
       }
     }
-  }, [gameMode, adaptiveLevel, autoAdjustLevel, isAiLearningEnabled, detailedStats, grantAchievement, winInfo, performancePoints]);
+  }, [gameMode, adaptiveLevel, autoAdjustLevel, isAiLearningEnabled, grantAchievement, winInfo]);
   const getAnimationSource = useCallback((r, c, currentBoard, currentMovesMade) => {
     if (currentMovesMade === 0 || isOnWall(r, c)) {
       return { r, c };
@@ -988,6 +1233,8 @@ var useGameLogic = () => {
     }
     const commitMove = () => {
       playSound("place");
+      setIsShaking(true);
+      setTimeout(() => setIsShaking(false), 200);
       const newBoard = board.map((row) => [...row]);
       newBoard[r][c] = currentPlayer;
       setBoard(newBoard);
@@ -998,9 +1245,15 @@ var useGameLogic = () => {
       setMovesMade(newMovesMade);
       setAnimationInfo(null);
       const winnerInfo = checkWin(currentPlayer, newBoard);
+      const mascotContextMessage = gameMode === "pvc" /* PvC */ && !winnerInfo ? analyzeMoveForMascot({ r, c }, newBoard, currentPlayer) : null;
       if (winnerInfo) {
         setWinInfo(winnerInfo);
         setGameOver(true);
+        if (gameMode === "pvc" /* PvC */) {
+          const winner = newBoard[winnerInfo[0][0].r][winnerInfo[0][0].c];
+          const message = winner === HUMAN_PLAYER ? getRandomMascotMessage("playerWins") : getRandomMascotMessage("aiWins");
+          setMascotMessageWithTimeout(message, 6e3);
+        }
         if (!tutorialState.active) {
           setTimeout(() => setShowGameOverModal(true), 1500);
         }
@@ -1017,12 +1270,18 @@ var useGameLogic = () => {
         setTimeout(showInstallPrompt, 1500);
       } else if (getValidMoves(newBoard, newMovesMade).length === 0) {
         setGameOver(true);
+        if (gameMode === "pvc" /* PvC */) {
+          setMascotMessageWithTimeout(getRandomMascotMessage("draw"), 6e3);
+        }
         if (!tutorialState.active) {
           setTimeout(() => setShowGameOverModal(true), 1500);
         }
         recordGameResult(newMoveHistory, null);
         setTimeout(showInstallPrompt, 1500);
       } else {
+        if (mascotContextMessage) {
+          setMascotMessageWithTimeout(mascotContextMessage);
+        }
         setCurrentPlayer((p) => p === PLAYER_X ? PLAYER_O : PLAYER_X);
       }
     };
@@ -1035,7 +1294,7 @@ var useGameLogic = () => {
     } else {
       commitMove();
     }
-  }, [board, currentPlayer, gameOver, movesMade, gameMode, moveHistory, playSound, getAnimationSource, isAnimationEnabled, tutorialState.active, recordGameResult, advanceTutorial]);
+  }, [board, currentPlayer, gameOver, movesMade, gameMode, moveHistory, playSound, getAnimationSource, isAnimationEnabled, tutorialState.active, recordGameResult, advanceTutorial, analyzeMoveForMascot, setMascotMessageWithTimeout, getRandomMascotMessage]);
   const justEndedTutorial = useRef(false);
   useEffect(() => {
     if (isInitialMount.current) {
@@ -1136,14 +1395,14 @@ var useGameLogic = () => {
         }, 500);
       }
     },
-    // Step 5 (NEW)
+    // Step 5 (Enhanced)
     {
-      text: "Great! Now for the 'Gravity' rule. A piece must always have a solid line of other pieces connecting it to a wall. These are your 'Gravity Bridges'. Try placing another piece.",
+      text: "Perfect. Now, the most important rule: 'Gravity Connection'. You can only play on a square if it's connected back to a wall by an unbroken line of pieces. Hover over the board to see these 'Gravity Bridges' in action. Now, make a valid move.",
       highlight: { type: "cells", cells: getValidMoves(board, movesMade) },
       isInteractive: true,
       advancesOnClick: true
     },
-    // Step 6 (NEW)
+    // Step 6
     {
       text: "Aha, a clever move! I see you're trying to build a bridge. I'll have to play nearby to counter.",
       highlight: null,
@@ -1174,25 +1433,25 @@ var useGameLogic = () => {
         }, 500);
       }
     },
-    // Step 7 (NEW)
+    // Step 7
     {
       text: "Notice the 'Auto-Adjust Level' toggle in the setup panel? If you keep winning, I'll get tougher. If you struggle, I'll ease up. This keeps things fair!",
       highlight: null,
       isInteractive: false
     },
-    // Step 8 (NEW)
+    // Step 8
     {
       text: "Should you prove to be a true master, you might unlock my secret lab... There, you can enable my 'Learning Mode,' where I remember every game we play!",
       highlight: null,
       isInteractive: false
     },
-    // Step 9 (was 5)
+    // Step 9
     {
       text: "Enough talk! Let's finish this game. Your goal is to get four in a row. I'll go easy on you... for now. Your turn!",
       highlight: { type: "cells", cells: getValidMoves(board, movesMade) },
       isInteractive: true
     },
-    // Step 10 (was 6)
+    // Step 10
     {
       text: "Congratulations, you did it! You've won your first game. You're ready to challenge me for real now.",
       highlight: null,
@@ -1293,6 +1552,32 @@ var useGameLogic = () => {
       return;
     }
     if (isValidMove(r, c, board, movesMade)) {
+      const isLearningMode = gameMode === "pvc" /* PvC */ && adaptiveLevel <= 1;
+      if (isLearningMode && !gameOver && currentPlayer === HUMAN_PLAYER) {
+        const tempBoard = board.map((row) => [...row]);
+        tempBoard[r][c] = HUMAN_PLAYER;
+        const aiNextMoves = getValidMoves(tempBoard, movesMade + 1);
+        let isBlunder = false;
+        for (const aiMove of aiNextMoves) {
+          const futureBoard = tempBoard.map((row) => [...row]);
+          futureBoard[aiMove.r][aiMove.c] = AI_PLAYER;
+          if (checkWin(AI_PLAYER, futureBoard)) {
+            isBlunder = true;
+            break;
+          }
+        }
+        if (isBlunder) {
+          setConfirmAction({
+            isOpen: true,
+            title: "Professor's Hint",
+            message: "Are you certain about that move? I see a potential danger there. Proceed anyway?",
+            confirmText: "Yes, Make Move",
+            actionType: "confirm_blunder",
+            payload: { r, c }
+          });
+          return;
+        }
+      }
       makeMove(r, c);
     } else {
       playSound("badmove");
@@ -1300,6 +1585,41 @@ var useGameLogic = () => {
       setTimeout(() => setInvalidMove(null), 300);
     }
   };
+  const handleCellHover = useCallback((r, c) => {
+    if (r === null || c === null || gameOver || isThinking || isSimulatingRef.current || !!animationInfo) {
+      setHighlightedPath([]);
+      return;
+    }
+    if (isOnWall(r, c)) {
+      setHighlightedPath([]);
+      return;
+    }
+    const findConnectionPath = (row, col, currentBoard) => {
+      const directions = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+      for (const [dr, dc] of directions) {
+        const path2 = [];
+        let pathIsGood = true;
+        let cr = row + dr;
+        let cc = col + dc;
+        while (cr >= 0 && cr < BOARD_SIZE && cc >= 0 && cc < BOARD_SIZE) {
+          if (currentBoard[cr][cc]) {
+            path2.push({ r: cr, c: cc });
+          } else {
+            pathIsGood = false;
+            break;
+          }
+          cr += dr;
+          cc += dc;
+        }
+        if (path2.length > 0 && pathIsGood) {
+          return path2;
+        }
+      }
+      return null;
+    };
+    const path = findConnectionPath(r, c, board);
+    setHighlightedPath(path || []);
+  }, [board, gameOver, isThinking, animationInfo]);
   const setOnlineRole = useCallback((role) => {
     playSound("uiclick");
     setOnlineRoleInternal(role);
@@ -1588,7 +1908,12 @@ var useGameLogic = () => {
       }
       await new Promise((resolve) => setTimeout(resolve, 100));
       let bestMove;
-      if (adaptiveLevel === 0) {
+      const currentLevelSetting = AI_LEVELS[adaptiveLevel];
+      if (!currentLevelSetting) {
+        console.error(`Invalid adaptiveLevel: ${adaptiveLevel}. Falling back to random move.`);
+        return potentialMoves[Math.floor(Math.random() * potentialMoves.length)] || null;
+      }
+      if (currentLevelSetting.depth === 0) {
         const immediateWinMove = potentialMoves.find((move) => {
           const tempBoard = board.map((r) => [...r]);
           tempBoard[move.r][move.c] = AI_PLAYER;
@@ -1617,16 +1942,8 @@ var useGameLogic = () => {
             }
           }
         }
-      } else if (adaptiveLevel === 1 || adaptiveLevel === 2) {
-        const settings = [
-          null,
-          // Novice: Depth 1, wider probability spread among top 3 moves
-          { depth: 1, strategic: false, probabilities: [0.6, 0.3, 0.1] },
-          // Intermediate: Depth 2, heavily favors the best move but can still pick 2nd or 3rd
-          { depth: 2, strategic: false, probabilities: [0.85, 0.1, 0.05] }
-        ];
-        const currentSetting = settings[adaptiveLevel];
-        const scoringFunction = currentSetting.strategic ? scorePositionStrategic : scorePositionTactical;
+      } else if (currentLevelSetting.probabilities) {
+        const scoringFunction = currentLevelSetting.strategic ? scorePositionStrategic : scorePositionTactical;
         const transpositionTable = /* @__PURE__ */ new Map();
         const moveScores = [];
         for (const move of potentialMoves) {
@@ -1637,7 +1954,7 @@ var useGameLogic = () => {
             break;
           }
           const newHistory = [...moveHistory, { player: AI_PLAYER, r: move.r, c: move.c }];
-          const { score } = minimax(newBoard, movesMade + 1, currentSetting.depth, -Infinity, Infinity, false, scoringFunction, newHistory, transpositionTable);
+          const { score } = minimax(newBoard, movesMade + 1, currentLevelSetting.depth, -Infinity, Infinity, false, scoringFunction, newHistory, transpositionTable);
           moveScores.push({ move, score });
         }
         if (moveScores.length > 0) {
@@ -1647,9 +1964,9 @@ var useGameLogic = () => {
           } else {
             const rand = Math.random();
             let cumulativeProb = 0;
-            const topMoves = moveScores.slice(0, currentSetting.probabilities.length);
+            const topMoves = moveScores.slice(0, currentLevelSetting.probabilities.length);
             for (let i = 0; i < topMoves.length; i++) {
-              cumulativeProb += currentSetting.probabilities[i];
+              cumulativeProb += currentLevelSetting.probabilities[i];
               if (rand < cumulativeProb) {
                 bestMove = topMoves[i].move;
                 break;
@@ -1661,31 +1978,17 @@ var useGameLogic = () => {
           }
         }
       } else {
-        const settings = [
-          null,
-          null,
-          null,
-          { depth: 3, strategic: true },
-          // 3: Expert
-          { depth: 3, strategic: true },
-          // 4: Master
-          { depth: 4, strategic: true }
-          // 5: Grand Master
-        ];
-        const currentSetting = settings[adaptiveLevel];
-        if (currentSetting) {
-          const scoringFunction = currentSetting.strategic ? scorePositionStrategic : scorePositionTactical;
-          bestMove = getBestMove(
-            AI_PLAYER,
-            potentialMoves,
-            board,
-            moveHistory,
-            movesMade,
-            gameMemory,
-            currentSetting.depth,
-            scoringFunction
-          );
-        }
+        const scoringFunction = currentLevelSetting.strategic ? scorePositionStrategic : scorePositionTactical;
+        bestMove = getBestMove(
+          AI_PLAYER,
+          potentialMoves,
+          board,
+          moveHistory,
+          movesMade,
+          gameMemory,
+          currentLevelSetting.depth,
+          scoringFunction
+        );
       }
       if (!bestMove && potentialMoves.length > 0) {
         bestMove = potentialMoves[Math.floor(Math.random() * potentialMoves.length)];
@@ -1864,37 +2167,131 @@ Recognized Patterns: ${Object.keys(importedMemory.patterns).length}`);
   const tutorialHighlight = currentTutorialStep ? currentTutorialStep.highlight : null;
   const tutorialText = currentTutorialStep ? typeof currentTutorialStep.text === "function" ? currentTutorialStep.text() : currentTutorialStep.text : "";
   const isTutorialInteractive = currentTutorialStep ? currentTutorialStep.isInteractive : false;
+  const handleUIClick = useCallback(() => {
+    playSound("uiclick");
+  }, [playSound]);
+  const toggleAutoAdjustLevel = useCallback(() => {
+    playSound("uiclick");
+    setAutoAdjustLevel((prev) => !prev);
+  }, [playSound]);
+  const handleConfirmAction = useCallback(() => {
+    if (!confirmAction) return;
+    playSound("uiclick");
+    const isGameInProgress = isForfeitable;
+    const { actionType, payload } = confirmAction;
+    switch (actionType) {
+      case "reset":
+        if (isGameInProgress) {
+          if (gameMode === "pvc" /* PvC */) {
+            recordGameResult(moveHistory, AI_PLAYER);
+            setScores((prev) => {
+              const newScores = JSON.parse(JSON.stringify(prev));
+              newScores[gameMode][AI_PLAYER]++;
+              return newScores;
+            });
+          } else if (gameMode === "pvp" /* PvP */) {
+            const winner = currentPlayer === PLAYER_X ? PLAYER_O : PLAYER_X;
+            setScores((prev) => {
+              const newScores = JSON.parse(JSON.stringify(prev));
+              newScores[gameMode][winner]++;
+              return newScores;
+            });
+          }
+        }
+        _startNewGame();
+        break;
+      case "change_level":
+        if (isGameInProgress) {
+          recordGameResult(moveHistory, AI_PLAYER);
+          setScores((prev) => {
+            const newScores = JSON.parse(JSON.stringify(prev));
+            newScores[gameMode][AI_PLAYER]++;
+            return newScores;
+          });
+        }
+        setAdaptiveLevel(payload);
+        _startNewGame();
+        break;
+      case "change_mode":
+        if (isGameInProgress) {
+          if (gameMode === "pvc" /* PvC */) {
+            recordGameResult(moveHistory, AI_PLAYER);
+            setScores((prev) => {
+              const newScores = JSON.parse(JSON.stringify(prev));
+              newScores[gameMode][AI_PLAYER]++;
+              return newScores;
+            });
+          } else if (gameMode === "pvp" /* PvP */) {
+            const winner = currentPlayer === PLAYER_X ? PLAYER_O : PLAYER_X;
+            setScores((prev) => {
+              const newScores = JSON.parse(JSON.stringify(prev));
+              newScores[gameMode][winner]++;
+              return newScores;
+            });
+          }
+        }
+        isSwitchingMode.current = true;
+        const gameStateToSave = { board, currentPlayer, nextStarter, movesMade, gameOver, winInfo, lastMove, moveHistory };
+        try {
+          const allSlotsJSON = localStorage.getItem(CAZ_CONNECT_GAME_SLOTS_KEY);
+          const allSlots = allSlotsJSON ? JSON.parse(allSlotsJSON) : {};
+          allSlots[gameMode] = gameStateToSave;
+          localStorage.setItem(CAZ_CONNECT_GAME_SLOTS_KEY, JSON.stringify(allSlots));
+        } catch (error) {
+          console.error("Failed to save game state to localStorage", error);
+        }
+        masterReset(PLAYER_X);
+        setNextStarter(PLAYER_O);
+        if (payload !== "online" /* Online */) {
+          setOnlineRoleInternal(null);
+        }
+        setGameMode(payload);
+        break;
+      case "confirm_blunder":
+        if (payload && typeof payload.r === "number" && typeof payload.c === "number") {
+          makeMove(payload.r, payload.c);
+        }
+        break;
+    }
+    setConfirmAction(null);
+  }, [confirmAction, playSound, gameMode, recordGameResult, moveHistory, _startNewGame, currentPlayer, masterReset, board, nextStarter, winInfo, lastMove, isForfeitable, makeMove]);
   const setGameModeAction = useCallback((mode) => {
     if (isSimulatingRef.current || tutorialState.active || gameMode === mode) return;
-    playSound("uiclick");
-    isSwitchingMode.current = true;
-    const gameStateToSave = {
-      board,
-      currentPlayer,
-      nextStarter,
-      movesMade,
-      gameOver,
-      winInfo,
-      lastMove,
-      moveHistory
+    const switchMode = () => {
+      playSound("uiclick");
+      isSwitchingMode.current = true;
+      const gameStateToSave = { board, currentPlayer, nextStarter, movesMade, gameOver, winInfo, lastMove, moveHistory };
+      try {
+        const allSlotsJSON = localStorage.getItem(CAZ_CONNECT_GAME_SLOTS_KEY);
+        const allSlots = allSlotsJSON ? JSON.parse(allSlotsJSON) : {};
+        allSlots[gameMode] = gameStateToSave;
+        localStorage.setItem(CAZ_CONNECT_GAME_SLOTS_KEY, JSON.stringify(allSlots));
+      } catch (error) {
+        console.error("Failed to save game state to localStorage", error);
+      }
+      masterReset(PLAYER_X);
+      setNextStarter(PLAYER_O);
+      if (mode !== "online" /* Online */) {
+        setOnlineRoleInternal(null);
+      }
+      setGameMode(mode);
     };
-    try {
-      const allSlotsJSON = localStorage.getItem(CAZ_CONNECT_GAME_SLOTS_KEY);
-      const allSlots = allSlotsJSON ? JSON.parse(allSlotsJSON) : {};
-      allSlots[gameMode] = gameStateToSave;
-      localStorage.setItem(CAZ_CONNECT_GAME_SLOTS_KEY, JSON.stringify(allSlots));
-    } catch (error) {
-      console.error("Failed to save game state to localStorage", error);
+    if (isForfeitable) {
+      setConfirmAction({
+        isOpen: true,
+        title: "Change Game Mode?",
+        message: "This will forfeit the current game and count as a loss. Are you sure?",
+        confirmText: "Forfeit & Change",
+        actionType: "change_mode",
+        payload: mode
+      });
+    } else {
+      switchMode();
     }
-    masterReset(PLAYER_X);
-    setNextStarter(PLAYER_O);
-    if (mode !== "online" /* Online */) {
-      setOnlineRoleInternal(null);
-    }
-    setGameMode(mode);
   }, [
-    tutorialState.active,
     gameMode,
+    tutorialState.active,
+    playSound,
     board,
     currentPlayer,
     nextStarter,
@@ -1904,31 +2301,19 @@ Recognized Patterns: ${Object.keys(importedMemory.patterns).length}`);
     lastMove,
     moveHistory,
     masterReset,
-    playSound
+    isForfeitable
   ]);
-  const handleUIClick = useCallback(() => {
-    playSound("uiclick");
-  }, [playSound]);
-  const toggleAutoAdjustLevel = useCallback(() => {
-    playSound("uiclick");
-    setAutoAdjustLevel((prev) => !prev);
-  }, [playSound]);
   const setAdaptiveLevelManual = useCallback((level) => {
     playSound("uiclick");
     if (adaptiveLevel === level) return;
-    if (movesMade > 0 && !gameOver && gameMode === "pvc" /* PvC */) {
+    if (isForfeitable && gameMode === "pvc" /* PvC */) {
       setConfirmAction({
         isOpen: true,
         title: "Change Difficulty?",
         message: "This will forfeit the current game and count as a loss. Are you sure?",
         confirmText: "Forfeit & Change",
-        onConfirm: () => {
-          playSound("uiclick");
-          recordGameResult(moveHistory, AI_PLAYER);
-          setAdaptiveLevel(level);
-          _startNewGame();
-          setConfirmAction(null);
-        }
+        actionType: "change_level",
+        payload: level
       });
     } else {
       setAdaptiveLevel(level);
@@ -1936,34 +2321,20 @@ Recognized Patterns: ${Object.keys(importedMemory.patterns).length}`);
         _startNewGame();
       }
     }
-  }, [playSound, adaptiveLevel, movesMade, gameOver, gameMode, recordGameResult, _startNewGame, moveHistory]);
+  }, [playSound, adaptiveLevel, gameMode, _startNewGame, isForfeitable, gameOver]);
   const resetGame = useCallback(() => {
-    if (movesMade > 0 && !gameOver) {
+    if (isForfeitable) {
       setConfirmAction({
         isOpen: true,
         title: "Forfeit Game?",
         message: "Starting a new game will count the current one as a loss. Are you sure?",
         confirmText: "Forfeit & Restart",
-        onConfirm: () => {
-          playSound("uiclick");
-          if (gameMode === "pvc" /* PvC */) {
-            recordGameResult(moveHistory, AI_PLAYER);
-          } else if (gameMode === "pvp" /* PvP */) {
-            const winner = currentPlayer === PLAYER_X ? PLAYER_O : PLAYER_X;
-            setScores((prev) => {
-              const newScores = JSON.parse(JSON.stringify(prev));
-              newScores[gameMode][winner]++;
-              return newScores;
-            });
-          }
-          _startNewGame();
-          setConfirmAction(null);
-        }
+        actionType: "reset"
       });
     } else {
       _startNewGame();
     }
-  }, [movesMade, gameOver, gameMode, currentPlayer, moveHistory, recordGameResult, _startNewGame, playSound]);
+  }, [_startNewGame, isForfeitable]);
   return {
     board,
     gameStatus,
@@ -1987,15 +2358,19 @@ Recognized Patterns: ${Object.keys(importedMemory.patterns).length}`);
     isMuted,
     isHapticEnabled,
     isAiLearningEnabled,
+    isScreenShakeEnabled,
+    mascotMessage,
     levelChange,
     showRulesModal,
     confirmAction,
+    isShaking,
     playerName,
     playerPiece,
     playerOName,
     playerOPiece,
     detailedStats,
     unlockedAchievements,
+    highlightedPath,
     installPrompt: {
       visible: isInstallPromptVisible,
       trigger: triggerInstallPrompt,
@@ -2026,6 +2401,7 @@ Recognized Patterns: ${Object.keys(importedMemory.patterns).length}`);
       startTutorial,
       endTutorial,
       advanceTutorial,
+      toggleScreenShakeEnabled,
       setOnlineRole,
       loadOnlineGame,
       dismissUnlockModal,
@@ -2033,6 +2409,7 @@ Recognized Patterns: ${Object.keys(importedMemory.patterns).length}`);
       openRulesModal,
       closeRulesModal,
       cancelConfirmAction,
+      handleConfirmAction,
       toggleAutoAdjustLevel,
       setAdaptiveLevelManual,
       toggleIsAiLearningEnabled,
@@ -2040,14 +2417,23 @@ Recognized Patterns: ${Object.keys(importedMemory.patterns).length}`);
       setPlayerPiece,
       setPlayerOName,
       setPlayerOPiece,
-      handleUIClick
+      handleUIClick,
+      handleCellHover
     }
   };
 };
 
+// components/MascotSpeechBubble.tsx
+import { jsx } from "react/jsx-runtime";
+var MascotSpeechBubble = ({ message }) => {
+  const isVisible = !!message;
+  return /* @__PURE__ */ jsx("div", { className: `mascot-speech-bubble ${isVisible ? "visible" : ""}`, children: message });
+};
+var MascotSpeechBubble_default = MascotSpeechBubble;
+
 // components/Header.tsx
-import { jsx, jsxs } from "react/jsx-runtime";
-var Mascot = ({ isThinking }) => /* @__PURE__ */ jsx("div", { children: /* @__PURE__ */ jsx(
+import { jsx as jsx2, jsxs } from "react/jsx-runtime";
+var Mascot = ({ isThinking }) => /* @__PURE__ */ jsx2("div", { children: /* @__PURE__ */ jsx2(
   "img",
   {
     src: "./professor-caz.png",
@@ -2055,24 +2441,27 @@ var Mascot = ({ isThinking }) => /* @__PURE__ */ jsx("div", { children: /* @__PU
     className: `h-[90px] w-[90px] lg:h-[110px] lg:w-[110px] rounded-2xl shadow-lg flex-shrink-0 transition-opacity duration-500 mascot-image ${isThinking ? "animate-pulse" : ""}`
   }
 ) });
-var Header = ({ isThinking }) => {
-  return /* @__PURE__ */ jsx("header", { className: "title-container flex flex-row items-center justify-center gap-4 w-full mt-2.5", children: /* @__PURE__ */ jsxs("div", { className: "title-left flex items-center gap-2 sm:gap-4 min-w-0", children: [
-    /* @__PURE__ */ jsx(Mascot, { isThinking }),
+var Header = ({ isThinking, mascotMessage }) => {
+  return /* @__PURE__ */ jsx2("header", { className: "title-container flex flex-row items-center justify-center gap-4 w-full mt-2.5", children: /* @__PURE__ */ jsxs("div", { className: "title-left flex items-center gap-2 sm:gap-4 min-w-0", children: [
+    /* @__PURE__ */ jsxs("div", { className: "relative flex-shrink-0", children: [
+      /* @__PURE__ */ jsx2(Mascot, { isThinking }),
+      /* @__PURE__ */ jsx2(MascotSpeechBubble_default, { message: mascotMessage })
+    ] }),
     /* @__PURE__ */ jsxs("div", { className: "title-text-group text-left min-w-0", children: [
-      /* @__PURE__ */ jsx("h1", { className: "title-font header-title font-bold text-2xl sm:text-3xl md:text-4xl lg:text-5xl m-0 tracking-wide", children: "Caz Connect" }),
-      /* @__PURE__ */ jsx("h2", { className: "font-normal text-xs sm:text-sm md:text-lg lg:text-xl m-0 -mt-1 header-subtitle hidden sm:block", children: "A Game of Gravity & Connection" })
+      /* @__PURE__ */ jsx2("h1", { className: "title-font header-title font-bold text-2xl sm:text-3xl md:text-4xl lg:text-5xl m-0 tracking-wide", children: "Caz Connect" }),
+      /* @__PURE__ */ jsx2("h2", { className: "font-normal text-xs sm:text-sm md:text-lg lg:text-xl m-0 -mt-1 header-subtitle hidden sm:block", children: "A Game of Gravity & Connection" })
     ] })
   ] }) });
 };
 var Header_default = Header;
 
 // components/Status.tsx
-import { jsx as jsx2, jsxs as jsxs2 } from "react/jsx-runtime";
+import { jsx as jsx3, jsxs as jsxs2 } from "react/jsx-runtime";
 var Status = ({ statusText, scores, gameMode, adaptiveLevel, playerName, playerPiece, playerOName, playerOPiece, currentPlayer, gameOver }) => {
   const playerXLabel = `${playerName} (${playerPiece})`;
-  const playerOLabel = gameMode === "pvc" /* PvC */ ? `Professor Caz (${LEVEL_NAMES[adaptiveLevel]})` : `${playerOName} (${playerOPiece})`;
+  const playerOLabel = gameMode === "pvc" /* PvC */ ? `Professor Caz (${AI_LEVELS[adaptiveLevel]?.name || "Unknown"})` : `${playerOName} (${playerOPiece})`;
   return /* @__PURE__ */ jsxs2("div", { className: "order-2 w-full text-center my-4 lg:my-5", children: [
-    /* @__PURE__ */ jsx2("p", { className: "piece-font text-2xl font-semibold m-0 mb-3 min-h-[36px] status-text", children: statusText }),
+    /* @__PURE__ */ jsx3("p", { className: "piece-font text-2xl font-semibold m-0 mb-3 min-h-[36px] status-text", children: statusText }),
     /* @__PURE__ */ jsxs2("div", { className: "flex justify-center gap-5 text-base", children: [
       /* @__PURE__ */ jsxs2("span", { className: `py-1 px-4 rounded font-bold score-display score-display-x ${!gameOver && currentPlayer === "X" /* X */ ? "active-player" : ""}`, children: [
         playerXLabel,
@@ -2093,8 +2482,8 @@ var Status_default = Status;
 import { useRef as useRef2, useState as useState3, useEffect as useEffect2, useCallback as useCallback2, useMemo as useMemo2 } from "react";
 
 // components/Cell.tsx
-import { jsx as jsx3, jsxs as jsxs3 } from "react/jsx-runtime";
-var Cell = ({ value, playerPiece, playerOPiece, isLastMove, isValid, highlightValid, isWinningPiece, isTutorialHighlighted, isInvalidMoveAttempt, onClick, "data-row": dataRow, "data-col": dataCol }) => {
+import { jsx as jsx4, jsxs as jsxs3 } from "react/jsx-runtime";
+var Cell = ({ value, playerPiece, playerOPiece, isLastMove, isValid, highlightValid, isWinningPiece, isTutorialHighlighted, isInvalidMoveAttempt, isHighlightedPath, onHover, onClick, "data-row": dataRow, "data-col": dataCol }) => {
   const playerClasses = value === "X" ? "player-x-piece" : "player-o-piece";
   const baseClasses = "relative aspect-square text-[5.5vmin] lg:text-[42px] flex items-center justify-center font-bold transition-all duration-200 piece-font leading-none text-center select-none";
   const stateClasses = `
@@ -2107,7 +2496,8 @@ var Cell = ({ value, playerPiece, playerOPiece, isLastMove, isValid, highlightVa
     isLastMove ? "animate-pop-in" : "",
     isWinningPiece ? "animate-win-pulse" : "",
     isTutorialHighlighted ? "animate-tutorial-pulse" : "",
-    isInvalidMoveAttempt ? "animate-invalid-move" : ""
+    isInvalidMoveAttempt ? "animate-invalid-move" : "",
+    isHighlightedPath ? "animate-path-highlight" : ""
   ].filter(Boolean).join(" ");
   const displayValue = value === "X" /* X */ ? playerPiece : value === "O" /* O */ ? playerOPiece : value;
   return /* @__PURE__ */ jsxs3(
@@ -2115,11 +2505,14 @@ var Cell = ({ value, playerPiece, playerOPiece, isLastMove, isValid, highlightVa
     {
       className: `${baseClasses} ${stateClasses} ${animationClasses} board-cell ${isValid ? "valid-move" : ""}`,
       onClick,
+      onMouseEnter: () => {
+        if (isValid) onHover(dataRow, dataCol);
+      },
       "data-row": dataRow,
       "data-col": dataCol,
       children: [
         displayValue,
-        /* @__PURE__ */ jsx3("style", { children: `
+        /* @__PURE__ */ jsx4("style", { children: `
                 @keyframes pop-in { 
                     0% { transform: scale(0.5); opacity: 0; } 
                     100% { transform: scale(1); opacity: 1; } 
@@ -2162,6 +2555,21 @@ var Cell = ({ value, playerPiece, playerOPiece, isLastMove, isValid, highlightVa
                     animation: invalid-move-flash 0.3s ease-in-out;
                     border-radius: 0.5rem;
                 }
+                @keyframes path-highlight-glow {
+                    from { background-color: rgba(255, 255, 255, 0.08); }
+                    to { background-color: rgba(255, 255, 255, 0.2); }
+                }
+                .theme-science .animate-path-highlight {
+                  animation-name: path-highlight-glow-science;
+                }
+                @keyframes path-highlight-glow-science {
+                    from { background-color: rgba(0, 0, 0, 0.04); }
+                    to { background-color: rgba(0, 0, 0, 0.12); }
+                }
+                .animate-path-highlight {
+                    animation: path-highlight-glow 0.8s alternate infinite ease-in-out;
+                    border-radius: 0.5rem;
+                }
             ` })
       ]
     }
@@ -2171,7 +2579,7 @@ var Cell_default = Cell;
 
 // components/AnimatedPiece.tsx
 import { useState as useState2, useLayoutEffect } from "react";
-import { jsx as jsx4 } from "react/jsx-runtime";
+import { jsx as jsx5 } from "react/jsx-runtime";
 var AnimatedPiece = ({ animationInfo, boardRef, playerPiece, playerOPiece }) => {
   const [style, setStyle] = useState2({
     opacity: 0,
@@ -2240,13 +2648,13 @@ var AnimatedPiece = ({ animationInfo, boardRef, playerPiece, playerOPiece }) => 
   }
   const playerClass = animationInfo.player === "X" /* X */ ? "player-x-piece" : "player-o-piece";
   const displayPiece = animationInfo.player === "X" /* X */ ? playerPiece : playerOPiece;
-  return /* @__PURE__ */ jsx4("div", { style, className: "text-[5.5vmin] lg:text-[42px] flex items-center justify-center font-bold piece-font leading-none text-center", children: /* @__PURE__ */ jsx4("span", { className: playerClass, children: displayPiece }) });
+  return /* @__PURE__ */ jsx5("div", { style, className: "text-[5.5vmin] lg:text-[42px] flex items-center justify-center font-bold piece-font leading-none text-center", children: /* @__PURE__ */ jsx5("span", { className: playerClass, children: displayPiece }) });
 };
 var AnimatedPiece_default = AnimatedPiece;
 
 // components/Board.tsx
-import { jsx as jsx5, jsxs as jsxs4 } from "react/jsx-runtime";
-var Board = ({ board, onCellClick, validMoves, lastMove, winInfo, invalidMove, isThinking, tutorialHighlight, animationInfo, adaptiveLevel, gameMode, playerPiece, playerOPiece }) => {
+import { jsx as jsx6, jsxs as jsxs4 } from "react/jsx-runtime";
+var Board = ({ board, onCellClick, validMoves, lastMove, winInfo, invalidMove, isThinking, tutorialHighlight, animationInfo, adaptiveLevel, gameMode, playerPiece, playerOPiece, highlightedPath, onCellHover }) => {
   const boardRef = useRef2(null);
   const [lineData, setLineData] = useState3(null);
   const [isLineVisible, setIsLineVisible] = useState3(false);
@@ -2321,6 +2729,9 @@ var Board = ({ board, onCellClick, validMoves, lastMove, winInfo, invalidMove, i
     if (!winInfo) return /* @__PURE__ */ new Set();
     return new Set(winInfo.flat().map((m) => `${m.r}-${m.c}`));
   }, [winInfo]);
+  const highlightedPathSet = useMemo2(() => {
+    return new Set(highlightedPath.map((m) => `${m.r}-${m.c}`));
+  }, [highlightedPath]);
   const tutorialHighlightedCells = useMemo2(() => {
     if (!tutorialHighlight) return /* @__PURE__ */ new Set();
     if (tutorialHighlight.type === "border") {
@@ -2339,17 +2750,19 @@ var Board = ({ board, onCellClick, validMoves, lastMove, winInfo, invalidMove, i
     return /* @__PURE__ */ new Set();
   }, [tutorialHighlight]);
   return /* @__PURE__ */ jsxs4("div", { className: "relative w-[90vmin] max-w-[525px] lg:w-[525px] p-2 board-frame rounded-lg shadow-2xl", ref: boardRef, children: [
-    /* @__PURE__ */ jsx5(
+    /* @__PURE__ */ jsx6(
       "div",
       {
         className: `aspect-square grid grid-cols-8 grid-rows-8 gap-0 transition-opacity duration-300 board-grid ${isThinking ? "cursor-wait opacity-60" : ""}`,
+        onMouseLeave: () => onCellHover(null, null),
         children: board.map(
           (row, r) => row.map((cell, c) => {
             const isCellValid = !winInfo && validMovesSet.has(`${r}-${c}`);
             const isWinningPiece = winPiecesSet.has(`${r}-${c}`);
             const isTutorialHighlighted = tutorialHighlightedCells.has(`${r}-${c}`);
             const isInvalidMoveAttempt = invalidMove?.r === r && invalidMove?.c === c;
-            return /* @__PURE__ */ jsx5(
+            const isHighlightedPath = highlightedPathSet.has(`${r}-${c}`);
+            return /* @__PURE__ */ jsx6(
               Cell_default,
               {
                 value: cell,
@@ -2361,6 +2774,8 @@ var Board = ({ board, onCellClick, validMoves, lastMove, winInfo, invalidMove, i
                 isWinningPiece,
                 isTutorialHighlighted,
                 isInvalidMoveAttempt,
+                isHighlightedPath,
+                onHover: onCellHover,
                 onClick: () => onCellClick(r, c),
                 "data-row": r,
                 "data-col": c
@@ -2371,16 +2786,16 @@ var Board = ({ board, onCellClick, validMoves, lastMove, winInfo, invalidMove, i
         )
       }
     ),
-    /* @__PURE__ */ jsx5(AnimatedPiece_default, { animationInfo, boardRef, playerPiece, playerOPiece }),
+    /* @__PURE__ */ jsx6(AnimatedPiece_default, { animationInfo, boardRef, playerPiece, playerOPiece }),
     lineData && /* @__PURE__ */ jsxs4("svg", { className: "absolute top-0 left-0 w-full h-full pointer-events-none overflow-visible", children: [
-      /* @__PURE__ */ jsx5("defs", { children: /* @__PURE__ */ jsxs4("filter", { id: "glow", x: "-50%", y: "-50%", width: "200%", height: "200%", children: [
-        /* @__PURE__ */ jsx5("feGaussianBlur", { stdDeviation: "3.5", result: "coloredBlur" }),
+      /* @__PURE__ */ jsx6("defs", { children: /* @__PURE__ */ jsxs4("filter", { id: "glow", x: "-50%", y: "-50%", width: "200%", height: "200%", children: [
+        /* @__PURE__ */ jsx6("feGaussianBlur", { stdDeviation: "3.5", result: "coloredBlur" }),
         /* @__PURE__ */ jsxs4("feMerge", { children: [
-          /* @__PURE__ */ jsx5("feMergeNode", { in: "coloredBlur" }),
-          /* @__PURE__ */ jsx5("feMergeNode", { in: "SourceGraphic" })
+          /* @__PURE__ */ jsx6("feMergeNode", { in: "coloredBlur" }),
+          /* @__PURE__ */ jsx6("feMergeNode", { in: "SourceGraphic" })
         ] })
       ] }) }),
-      lineData.map((line, index) => /* @__PURE__ */ jsx5("g", { transform: `translate(${line.x}, ${line.y}) rotate(${line.rotation})`, children: /* @__PURE__ */ jsx5(
+      lineData.map((line, index) => /* @__PURE__ */ jsx6("g", { transform: `translate(${line.x}, ${line.y}) rotate(${line.rotation})`, children: /* @__PURE__ */ jsx6(
         "rect",
         {
           x: "0",
@@ -2407,7 +2822,7 @@ import { useState as useState5, useRef as useRef4, useEffect as useEffect3 } fro
 
 // components/OnlineControls.tsx
 import { useState as useState4, useRef as useRef3 } from "react";
-import { jsx as jsx6, jsxs as jsxs5 } from "react/jsx-runtime";
+import { jsx as jsx7, jsxs as jsxs5 } from "react/jsx-runtime";
 var OnlineControls = ({ onlineRole, setOnlineRole, gameStateString, loadOnlineGame, currentPlayer, isGameOver, allDisabled, onUIClick, movesMade }) => {
   const [pastedCode, setPastedCode] = useState4("");
   const codeTextRef = useRef3(null);
@@ -2425,20 +2840,20 @@ var OnlineControls = ({ onlineRole, setOnlineRole, gameStateString, loadOnlineGa
   };
   if (!onlineRole) {
     return /* @__PURE__ */ jsxs5("div", { className: "flex flex-col gap-2.5 w-full mt-4 pt-4 border-t lab-section", children: [
-      /* @__PURE__ */ jsx6("p", { className: "text-center font-bold", children: "New Online Game" }),
+      /* @__PURE__ */ jsx7("p", { className: "text-center font-bold", children: "New Online Game" }),
       /* @__PURE__ */ jsxs5("div", { className: "grid grid-cols-2 gap-2.5", children: [
-        /* @__PURE__ */ jsx6("button", { onClick: () => setOnlineRole("X" /* X */), disabled: allDisabled, className: "control-button secondary-button", children: "Start as X" }),
-        /* @__PURE__ */ jsx6("button", { onClick: () => setOnlineRole("O" /* O */), disabled: allDisabled, className: "control-button secondary-button", children: "Join as O" })
+        /* @__PURE__ */ jsx7("button", { onClick: () => setOnlineRole("X" /* X */), disabled: allDisabled, className: "control-button secondary-button", children: "Start as X" }),
+        /* @__PURE__ */ jsx7("button", { onClick: () => setOnlineRole("O" /* O */), disabled: allDisabled, className: "control-button secondary-button", children: "Join as O" })
       ] }),
       /* @__PURE__ */ jsxs5("div", { className: "flex items-center my-2", children: [
-        /* @__PURE__ */ jsx6("hr", { className: "flex-grow border-[var(--panel-border)] opacity-50" }),
-        /* @__PURE__ */ jsx6("span", { className: "px-2 text-xs uppercase", style: { color: "var(--text-panel)" }, children: "Or" }),
-        /* @__PURE__ */ jsx6("hr", { className: "flex-grow border-[var(--panel-border)] opacity-50" })
+        /* @__PURE__ */ jsx7("hr", { className: "flex-grow border-[var(--panel-border)] opacity-50" }),
+        /* @__PURE__ */ jsx7("span", { className: "px-2 text-xs uppercase", style: { color: "var(--text-panel)" }, children: "Or" }),
+        /* @__PURE__ */ jsx7("hr", { className: "flex-grow border-[var(--panel-border)] opacity-50" })
       ] }),
-      /* @__PURE__ */ jsx6("p", { className: "text-center font-bold", children: "Rejoin Game" }),
+      /* @__PURE__ */ jsx7("p", { className: "text-center font-bold", children: "Rejoin Game" }),
       /* @__PURE__ */ jsxs5("div", { className: "flex flex-col gap-2", children: [
-        /* @__PURE__ */ jsx6("label", { htmlFor: "rejoin-code-input", className: "control-label", children: "Paste a game code to load it:" }),
-        /* @__PURE__ */ jsx6(
+        /* @__PURE__ */ jsx7("label", { htmlFor: "rejoin-code-input", className: "control-label", children: "Paste a game code to load it:" }),
+        /* @__PURE__ */ jsx7(
           "textarea",
           {
             id: "rejoin-code-input",
@@ -2449,7 +2864,7 @@ var OnlineControls = ({ onlineRole, setOnlineRole, gameStateString, loadOnlineGa
             disabled: allDisabled
           }
         ),
-        /* @__PURE__ */ jsx6("button", { onClick: () => {
+        /* @__PURE__ */ jsx7("button", { onClick: () => {
           loadOnlineGame(pastedCode);
           setPastedCode("");
         }, disabled: allDisabled || !pastedCode, className: "control-button primary-button", children: "Load Game" })
@@ -2463,12 +2878,12 @@ var OnlineControls = ({ onlineRole, setOnlineRole, gameStateString, loadOnlineGa
         "You are Player ",
         onlineRole
       ] }),
-      /* @__PURE__ */ jsx6("p", { className: "font-semibold control-label min-h-[20px]", children: isGameOver ? "Game Over!" : isMyTurn ? "It's your turn!" : `Waiting for Player ${currentPlayer}...` })
+      /* @__PURE__ */ jsx7("p", { className: "font-semibold control-label min-h-[20px]", children: isGameOver ? "Game Over!" : isMyTurn ? "It's your turn!" : `Waiting for Player ${currentPlayer}...` })
     ] }),
-    isMyTurn && movesMade === 0 && /* @__PURE__ */ jsx6("p", { className: "text-center control-label mt-2 p-2 rounded", style: { backgroundColor: "rgba(0,0,0,0.05)" }, children: "Make your first move to generate a game code to share." }),
+    isMyTurn && movesMade === 0 && /* @__PURE__ */ jsx7("p", { className: "text-center control-label mt-2 p-2 rounded", style: { backgroundColor: "rgba(0,0,0,0.05)" }, children: "Make your first move to generate a game code to share." }),
     !isMyTurn && !isGameOver && /* @__PURE__ */ jsxs5("div", { className: "flex flex-col gap-2", children: [
-      /* @__PURE__ */ jsx6("label", { htmlFor: "game-code-input", className: "control-label", children: "Paste opponent's game code:" }),
-      /* @__PURE__ */ jsx6(
+      /* @__PURE__ */ jsx7("label", { htmlFor: "game-code-input", className: "control-label", children: "Paste opponent's game code:" }),
+      /* @__PURE__ */ jsx7(
         "textarea",
         {
           id: "game-code-input",
@@ -2479,14 +2894,14 @@ var OnlineControls = ({ onlineRole, setOnlineRole, gameStateString, loadOnlineGa
           disabled: allDisabled
         }
       ),
-      /* @__PURE__ */ jsx6("button", { onClick: () => {
+      /* @__PURE__ */ jsx7("button", { onClick: () => {
         loadOnlineGame(pastedCode);
         setPastedCode("");
       }, disabled: allDisabled || !pastedCode, className: "control-button primary-button", children: "Load Move" })
     ] }),
     gameStateString && /* @__PURE__ */ jsxs5("div", { className: "flex flex-col gap-2 mt-2", children: [
-      /* @__PURE__ */ jsx6("label", { htmlFor: "game-code-output", className: "control-label", children: "Share this code with your opponent:" }),
-      /* @__PURE__ */ jsx6(
+      /* @__PURE__ */ jsx7("label", { htmlFor: "game-code-output", className: "control-label", children: "Share this code with your opponent:" }),
+      /* @__PURE__ */ jsx7(
         "textarea",
         {
           id: "game-code-output",
@@ -2497,16 +2912,16 @@ var OnlineControls = ({ onlineRole, setOnlineRole, gameStateString, loadOnlineGa
           onFocus: (e) => e.target.select()
         }
       ),
-      /* @__PURE__ */ jsx6("button", { onClick: handleCopyCode, disabled: allDisabled, className: "control-button secondary-button", children: copySuccess ? "Copied!" : "Copy Code" })
+      /* @__PURE__ */ jsx7("button", { onClick: handleCopyCode, disabled: allDisabled, className: "control-button secondary-button", children: copySuccess ? "Copied!" : "Copy Code" })
     ] })
   ] });
 };
 var OnlineControls_default = OnlineControls;
 
 // components/ReleaseNotesModal.tsx
-import { jsx as jsx7, jsxs as jsxs6 } from "react/jsx-runtime";
+import { jsx as jsx8, jsxs as jsxs6 } from "react/jsx-runtime";
 var ReleaseNotesModal = ({ onClose }) => {
-  return /* @__PURE__ */ jsx7(
+  return /* @__PURE__ */ jsx8(
     "div",
     {
       className: "fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4 animate-fade-in-fast",
@@ -2517,23 +2932,66 @@ var ReleaseNotesModal = ({ onClose }) => {
           className: "component-panel rounded-lg p-6 max-w-lg w-full text-center relative transform animate-pop-in-modal max-h-[90vh] flex flex-col",
           onClick: (e) => e.stopPropagation(),
           children: [
-            /* @__PURE__ */ jsx7("h2", { className: "text-3xl font-bold title-font mb-4", style: { color: "var(--text-header)" }, children: "Version 1.1.3 Patch Notes" }),
+            /* @__PURE__ */ jsx8("h2", { className: "text-3xl font-bold title-font mb-4", style: { color: "var(--text-header)" }, children: "Version 1.1.4 Patch Notes" }),
             /* @__PURE__ */ jsxs6("div", { className: "overflow-y-auto text-left space-y-4 text-base pr-2 -mr-2", children: [
-              /* @__PURE__ */ jsx7("p", { children: "This patch brings some fun interactive elements to the achievements screen and polishes up a few rough edges." }),
+              /* @__PURE__ */ jsx8("p", { children: "This major update brings Professor Caz to life, enhances the new player experience, and introduces numerous quality-of-life improvements and bug fixes!" }),
               /* @__PURE__ */ jsxs6("div", { children: [
-                /* @__PURE__ */ jsx7("h3", { className: "font-bold text-lg", style: { color: "var(--text-panel)" }, children: "Interactive Achievements" }),
-                /* @__PURE__ */ jsx7("ul", { className: "list-disc list-inside space-y-2 mt-2 text-sm", children: /* @__PURE__ */ jsx7("li", { children: "You can now click on locked achievements! Professor Caz will give you a cryptic hint about how to unlock them. Happy hunting!" }) })
-              ] }),
-              /* @__PURE__ */ jsxs6("div", { children: [
-                /* @__PURE__ */ jsx7("h3", { className: "font-bold text-lg", style: { color: "var(--text-panel)" }, children: "Bug Fixes & Polish" }),
+                /* @__PURE__ */ jsx8("h3", { className: "font-bold text-lg", style: { color: "var(--text-panel)" }, children: "A More Lively Opponent!" }),
                 /* @__PURE__ */ jsxs6("ul", { className: "list-disc list-inside space-y-2 mt-2 text-sm", children: [
-                  /* @__PURE__ */ jsx7("li", { children: 'Fixed a minor visual glitch where the "invalid move" indicator was sometimes not triggering correctly on rapid clicks.' }),
-                  /* @__PURE__ */ jsx7("li", { children: "Slightly improved the responsiveness of the UI on smaller devices." })
+                  /* @__PURE__ */ jsxs6("li", { children: [
+                    /* @__PURE__ */ jsx8("strong", { children: "Mascot Speech Bubble:" }),
+                    " Professor Caz will now offer contextual commentary on the game, reacting to threats, blocks, and wins!"
+                  ] }),
+                  /* @__PURE__ */ jsxs6("li", { children: [
+                    /* @__PURE__ */ jsx8("strong", { children: "Sci-Fi Mode Activated:" }),
+                    ` When using the "Cosmic" theme, the Professor's dialogue is now filled with iconic quotes from your favorite sci-fi movies and shows.`
+                  ] })
                 ] })
               ] }),
-              /* @__PURE__ */ jsx7("p", { className: "pt-2", children: "Thanks for playing and keep the feedback coming!" })
+              /* @__PURE__ */ jsxs6("div", { children: [
+                /* @__PURE__ */ jsx8("h3", { className: "font-bold text-lg", style: { color: "var(--text-panel)" }, children: "Enhanced Learning Tools" }),
+                /* @__PURE__ */ jsxs6("ul", { className: "list-disc list-inside space-y-2 mt-2 text-sm", children: [
+                  /* @__PURE__ */ jsxs6("li", { children: [
+                    /* @__PURE__ */ jsx8("strong", { children: "Gravity Bridge Highlighting:" }),
+                    " Hover over a valid move to see a subtle glow on the pieces connecting it back to the wall, intuitively teaching the game's core rule."
+                  ] }),
+                  /* @__PURE__ */ jsxs6("li", { children: [
+                    /* @__PURE__ */ jsx8("strong", { children: '"Play & Learn" Hints:' }),
+                    " On lower difficulties, the Professor will now offer a gentle warning if you're about to make a move that leads to an immediate loss."
+                  ] }),
+                  /* @__PURE__ */ jsxs6("li", { children: [
+                    /* @__PURE__ */ jsx8("strong", { children: "Cryptic Achievement Hints:" }),
+                    " Clicking on a locked achievement now reveals a cryptic clue from the Professor to guide you."
+                  ] }),
+                  /* @__PURE__ */ jsxs6("li", { children: [
+                    /* @__PURE__ */ jsx8("strong", { children: "Improved Tutorial:" }),
+                    ' The tutorial has been updated to be more interactive and to better explain the "Gravity Connection" rule.'
+                  ] })
+                ] })
+              ] }),
+              /* @__PURE__ */ jsxs6("div", { children: [
+                /* @__PURE__ */ jsx8("h3", { className: "font-bold text-lg", style: { color: "var(--text-panel)" }, children: "Quality of Life & UI Polish" }),
+                /* @__PURE__ */ jsxs6("ul", { className: "list-disc list-inside space-y-2 mt-2 text-sm", children: [
+                  /* @__PURE__ */ jsxs6("li", { children: [
+                    /* @__PURE__ */ jsx8("strong", { children: "Helpful Tooltips:" }),
+                    " Hover over various controls in the settings panel to get a clear explanation of what they do."
+                  ] }),
+                  /* @__PURE__ */ jsxs6("li", { children: [
+                    /* @__PURE__ */ jsx8("strong", { children: "Satisfying Screen Shake:" }),
+                    " A subtle screen shake effect has been added when pieces land. This can be disabled in the Options tab and is now off by default."
+                  ] }),
+                  /* @__PURE__ */ jsxs6("li", { children: [
+                    /* @__PURE__ */ jsx8("strong", { children: "Critical Forfeit Fixes:" }),
+                    " Forfeiting a game now correctly updates your stats and the session scoreboard. A game can no longer be forfeited if you haven't made a move."
+                  ] }),
+                  /* @__PURE__ */ jsxs6("li", { children: [
+                    /* @__PURE__ */ jsx8("strong", { children: "Mobile Visibility Fix:" }),
+                    " Achievement hints and descriptions are now fully visible on mobile devices."
+                  ] })
+                ] })
+              ] })
             ] }),
-            /* @__PURE__ */ jsx7("div", { className: "mt-6", children: /* @__PURE__ */ jsx7(
+            /* @__PURE__ */ jsx8("div", { className: "mt-6", children: /* @__PURE__ */ jsx8(
               "button",
               {
                 onClick: onClose,
@@ -2541,7 +2999,7 @@ var ReleaseNotesModal = ({ onClose }) => {
                 children: "Close"
               }
             ) }),
-            /* @__PURE__ */ jsx7("style", { children: `
+            /* @__PURE__ */ jsx8("style", { children: `
                     @keyframes fade-in-fast { 
                         0% { opacity: 0; } 
                         100% { opacity: 1; } 
@@ -2562,9 +3020,16 @@ var ReleaseNotesModal = ({ onClose }) => {
 };
 var ReleaseNotesModal_default = ReleaseNotesModal;
 
+// components/Tooltip.tsx
+import { jsx as jsx9 } from "react/jsx-runtime";
+var Tooltip = ({ text }) => {
+  return /* @__PURE__ */ jsx9("div", { className: "tooltip", children: text });
+};
+var Tooltip_default = Tooltip;
+
 // components/Controls.tsx
-import { jsx as jsx8, jsxs as jsxs7 } from "react/jsx-runtime";
-var SectionHeader = ({ children }) => /* @__PURE__ */ jsx8("h3", { className: "text-sm font-bold uppercase tracking-wider mb-2 mt-4 first:mt-0 section-header", children });
+import { jsx as jsx10, jsxs as jsxs7 } from "react/jsx-runtime";
+var SectionHeader = ({ children }) => /* @__PURE__ */ jsx10("h3", { className: "text-sm font-bold uppercase tracking-wider mb-2 mt-4 first:mt-0 section-header", children });
 var Controls = ({
   gameMode,
   setGameMode,
@@ -2577,6 +3042,8 @@ var Controls = ({
   isTutorialActive,
   isAnimationEnabled,
   onToggleAnimation,
+  isScreenShakeEnabled,
+  onToggleScreenShakeEnabled,
   theme,
   onToggleTheme,
   isHapticEnabled,
@@ -2610,7 +3077,8 @@ var Controls = ({
   const fileInputRef = useRef4(null);
   const [activeTab, setActiveTab] = useState5("setup");
   const [showReleaseNotesModal, setShowReleaseNotesModal] = useState5(false);
-  const appVersion = "1.1.3";
+  const [activeTooltip, setActiveTooltip] = useState5(null);
+  const appVersion = "1.1.4";
   const [tempPlayerName, setTempPlayerName] = useState5(playerName);
   const [tempPlayerPiece, setTempPlayerPiece] = useState5(playerPiece);
   const [tempPlayerOName, setTempPlayerOName] = useState5(playerOName);
@@ -2658,31 +3126,31 @@ var Controls = ({
   const showLabControls = gameMode === "pvc" /* PvC */ && isLabUnlocked;
   const allDisabled = isSimulating || isTutorialActive;
   return /* @__PURE__ */ jsxs7("div", { className: "flex flex-col items-stretch w-11/12 lg:w-full gap-2.5 p-4 rounded-lg component-panel", children: [
-    /* @__PURE__ */ jsx8(SectionHeader, { children: "Actions" }),
-    /* @__PURE__ */ jsx8("button", { onClick: onReset, disabled: allDisabled, className: "control-button primary-button w-full", children: "New Game" }),
+    /* @__PURE__ */ jsx10(SectionHeader, { children: "Actions" }),
+    /* @__PURE__ */ jsx10("button", { onClick: onReset, disabled: allDisabled, className: "control-button primary-button w-full", children: "New Game" }),
     /* @__PURE__ */ jsxs7("div", { className: "tab-nav mt-4", children: [
-      /* @__PURE__ */ jsx8("button", { className: `tab-button ${activeTab === "setup" ? "active" : ""}`, onClick: () => {
+      /* @__PURE__ */ jsx10("button", { className: `tab-button ${activeTab === "setup" ? "active" : ""}`, onClick: () => {
         onUIClick();
         setActiveTab("setup");
       }, disabled: allDisabled, children: "Setup" }),
-      /* @__PURE__ */ jsx8("button", { className: `tab-button ${activeTab === "profile" ? "active" : ""}`, onClick: () => {
+      /* @__PURE__ */ jsx10("button", { className: `tab-button ${activeTab === "profile" ? "active" : ""}`, onClick: () => {
         onUIClick();
         setActiveTab("profile");
       }, disabled: allDisabled, children: "Profile" }),
-      /* @__PURE__ */ jsx8("button", { className: `tab-button ${activeTab === "options" ? "active" : ""}`, onClick: () => {
+      /* @__PURE__ */ jsx10("button", { className: `tab-button ${activeTab === "options" ? "active" : ""}`, onClick: () => {
         onUIClick();
         setActiveTab("options");
       }, disabled: allDisabled, children: "Options" }),
-      /* @__PURE__ */ jsx8("button", { className: `tab-button ${activeTab === "about" ? "active" : ""}`, onClick: () => {
+      /* @__PURE__ */ jsx10("button", { className: `tab-button ${activeTab === "about" ? "active" : ""}`, onClick: () => {
         onUIClick();
         setActiveTab("about");
       }, disabled: allDisabled, children: "About" })
     ] }),
     /* @__PURE__ */ jsxs7("div", { className: "tab-content", children: [
       activeTab === "setup" && /* @__PURE__ */ jsxs7("div", { className: "animate-fade-in-fast", children: [
-        /* @__PURE__ */ jsx8(SectionHeader, { children: "Game Setup" }),
+        /* @__PURE__ */ jsx10(SectionHeader, { children: "Game Setup" }),
         /* @__PURE__ */ jsxs7("div", { className: "game-mode-toggle", children: [
-          /* @__PURE__ */ jsx8(
+          /* @__PURE__ */ jsx10(
             "button",
             {
               onClick: () => setGameMode("pvc" /* PvC */),
@@ -2691,7 +3159,7 @@ var Controls = ({
               children: "vs. Professor Caz"
             }
           ),
-          /* @__PURE__ */ jsx8(
+          /* @__PURE__ */ jsx10(
             "button",
             {
               onClick: () => setGameMode("pvp" /* PvP */),
@@ -2700,7 +3168,7 @@ var Controls = ({
               children: "vs. Player"
             }
           ),
-          /* @__PURE__ */ jsx8(
+          /* @__PURE__ */ jsx10(
             "button",
             {
               onClick: () => setGameMode("online" /* Online */),
@@ -2712,33 +3180,29 @@ var Controls = ({
         ] }),
         gameMode === "pvc" /* PvC */ && /* @__PURE__ */ jsxs7("div", { className: "flex flex-col gap-2 mt-2 pt-2", children: [
           /* @__PURE__ */ jsxs7("div", { className: "control-row", children: [
-            /* @__PURE__ */ jsx8("label", { htmlFor: "auto-adjust-check", className: "control-label", children: "Auto-Adjust Level:" }),
-            /* @__PURE__ */ jsx8(
-              "button",
-              {
-                id: "auto-adjust-check",
-                role: "switch",
-                "aria-checked": autoAdjustLevel,
-                onClick: onToggleAutoAdjustLevel,
-                disabled: allDisabled,
-                className: `toggle-switch ${autoAdjustLevel ? "active" : ""}`,
-                children: /* @__PURE__ */ jsx8("span", { className: "toggle-switch-handle" })
-              }
-            )
+            /* @__PURE__ */ jsx10("label", { htmlFor: "auto-adjust-check", className: "control-label", children: "Auto-Adjust Level:" }),
+            /* @__PURE__ */ jsxs7("div", { className: "tooltip-container", onMouseEnter: () => setActiveTooltip("auto-adjust"), onMouseLeave: () => setActiveTooltip(null), children: [
+              /* @__PURE__ */ jsx10(
+                "button",
+                {
+                  id: "auto-adjust-check",
+                  role: "switch",
+                  "aria-checked": autoAdjustLevel,
+                  onClick: onToggleAutoAdjustLevel,
+                  disabled: allDisabled,
+                  className: `toggle-switch ${autoAdjustLevel ? "active" : ""}`,
+                  children: /* @__PURE__ */ jsx10("span", { className: "toggle-switch-handle" })
+                }
+              ),
+              activeTooltip === "auto-adjust" && /* @__PURE__ */ jsx10(Tooltip_default, { text: "Automatically adjusts difficulty based on your performance." })
+            ] })
           ] }),
           /* @__PURE__ */ jsxs7("div", { className: "control-row", children: [
-            /* @__PURE__ */ jsx8("label", { htmlFor: "difficulty-level", className: "control-label", children: "Level:" }),
-            /* @__PURE__ */ jsxs7("select", { id: "difficulty-level", value: adaptiveLevel, onChange: (e) => onSetAdaptiveLevel(parseInt(e.target.value, 10)), disabled: allDisabled || autoAdjustLevel, className: "control-select", children: [
-              /* @__PURE__ */ jsx8("option", { value: 0, children: "Beginner" }),
-              /* @__PURE__ */ jsx8("option", { value: 1, children: "Novice" }),
-              /* @__PURE__ */ jsx8("option", { value: 2, children: "Intermediate" }),
-              /* @__PURE__ */ jsx8("option", { value: 3, children: "Expert" }),
-              /* @__PURE__ */ jsx8("option", { value: 4, children: "Master" }),
-              /* @__PURE__ */ jsx8("option", { value: 5, children: "Grand Master" })
-            ] })
+            /* @__PURE__ */ jsx10("label", { htmlFor: "difficulty-level", className: "control-label", children: "Level:" }),
+            /* @__PURE__ */ jsx10("select", { id: "difficulty-level", value: adaptiveLevel, onChange: (e) => onSetAdaptiveLevel(parseInt(e.target.value, 10)), disabled: allDisabled || autoAdjustLevel, className: "control-select", children: AI_LEVELS.map((level, index) => /* @__PURE__ */ jsx10("option", { value: index, children: level.name }, level.name)) })
           ] })
         ] }),
-        gameMode === "online" /* Online */ && /* @__PURE__ */ jsx8(
+        gameMode === "online" /* Online */ && /* @__PURE__ */ jsx10(
           OnlineControls_default,
           {
             onlineRole,
@@ -2754,12 +3218,12 @@ var Controls = ({
         )
       ] }),
       activeTab === "profile" && /* @__PURE__ */ jsxs7("div", { className: "animate-fade-in-fast", children: [
-        /* @__PURE__ */ jsx8(SectionHeader, { children: "Personalization" }),
+        /* @__PURE__ */ jsx10(SectionHeader, { children: "Personalization" }),
         /* @__PURE__ */ jsxs7("div", { className: "flex flex-col gap-2", children: [
-          /* @__PURE__ */ jsx8("h4", { className: "font-semibold text-center -mb-1", style: { color: "var(--text-panel)" }, children: gameMode === "pvp" /* PvP */ ? "Player 1 (X)" : "Your Profile" }),
+          /* @__PURE__ */ jsx10("h4", { className: "font-semibold text-center -mb-1", style: { color: "var(--text-panel)" }, children: gameMode === "pvp" /* PvP */ ? "Player 1 (X)" : "Your Profile" }),
           /* @__PURE__ */ jsxs7("div", { className: "control-row", children: [
-            /* @__PURE__ */ jsx8("label", { htmlFor: "player-name-input", className: "control-label flex-shrink-0", children: "Name:" }),
-            /* @__PURE__ */ jsx8(
+            /* @__PURE__ */ jsx10("label", { htmlFor: "player-name-input", className: "control-label flex-shrink-0", children: "Name:" }),
+            /* @__PURE__ */ jsx10(
               "input",
               {
                 id: "player-name-input",
@@ -2773,8 +3237,8 @@ var Controls = ({
             )
           ] }),
           /* @__PURE__ */ jsxs7("div", { className: "control-row", children: [
-            /* @__PURE__ */ jsx8("label", { htmlFor: "player-piece-input", className: "control-label", children: "Piece:" }),
-            /* @__PURE__ */ jsx8(
+            /* @__PURE__ */ jsx10("label", { htmlFor: "player-piece-input", className: "control-label", children: "Piece:" }),
+            /* @__PURE__ */ jsx10(
               "input",
               {
                 id: "player-piece-input",
@@ -2790,10 +3254,10 @@ var Controls = ({
           ] })
         ] }),
         gameMode === "pvp" /* PvP */ && /* @__PURE__ */ jsxs7("div", { className: "flex flex-col gap-2 mt-4 pt-4 border-t lab-section", children: [
-          /* @__PURE__ */ jsx8("h4", { className: "font-semibold text-center -mb-1", style: { color: "var(--text-panel)" }, children: "Player 2 (O)" }),
+          /* @__PURE__ */ jsx10("h4", { className: "font-semibold text-center -mb-1", style: { color: "var(--text-panel)" }, children: "Player 2 (O)" }),
           /* @__PURE__ */ jsxs7("div", { className: "control-row", children: [
-            /* @__PURE__ */ jsx8("label", { htmlFor: "player-o-name-input", className: "control-label flex-shrink-0", children: "Name:" }),
-            /* @__PURE__ */ jsx8(
+            /* @__PURE__ */ jsx10("label", { htmlFor: "player-o-name-input", className: "control-label flex-shrink-0", children: "Name:" }),
+            /* @__PURE__ */ jsx10(
               "input",
               {
                 id: "player-o-name-input",
@@ -2807,8 +3271,8 @@ var Controls = ({
             )
           ] }),
           /* @__PURE__ */ jsxs7("div", { className: "control-row", children: [
-            /* @__PURE__ */ jsx8("label", { htmlFor: "player-o-piece-input", className: "control-label", children: "Piece:" }),
-            /* @__PURE__ */ jsx8(
+            /* @__PURE__ */ jsx10("label", { htmlFor: "player-o-piece-input", className: "control-label", children: "Piece:" }),
+            /* @__PURE__ */ jsx10(
               "input",
               {
                 id: "player-o-piece-input",
@@ -2824,104 +3288,131 @@ var Controls = ({
           ] })
         ] }),
         /* @__PURE__ */ jsxs7("div", { className: "mt-4 flex items-center justify-end gap-2", children: [
-          isSaved && /* @__PURE__ */ jsx8("span", { className: "text-sm animate-fade-in-fast", style: { color: "var(--toggle-active-bg)" }, children: "Saved!" }),
-          /* @__PURE__ */ jsx8("button", { onClick: handleApplyChanges, disabled: allDisabled || !hasChanges, className: "control-button primary-button", children: "Apply" })
+          isSaved && /* @__PURE__ */ jsx10("span", { className: "text-sm animate-fade-in-fast", style: { color: "var(--toggle-active-bg)" }, children: "Saved!" }),
+          /* @__PURE__ */ jsx10("button", { onClick: handleApplyChanges, disabled: allDisabled || !hasChanges, className: "control-button primary-button", children: "Apply" })
         ] })
       ] }),
       activeTab === "options" && /* @__PURE__ */ jsxs7("div", { className: "animate-fade-in-fast", children: [
-        /* @__PURE__ */ jsx8(SectionHeader, { children: "Preferences" }),
+        /* @__PURE__ */ jsx10(SectionHeader, { children: "Preferences" }),
         /* @__PURE__ */ jsxs7("div", { className: "control-row", children: [
-          /* @__PURE__ */ jsx8("label", { htmlFor: "enable-animations-check", className: "control-label", children: "Animations:" }),
-          /* @__PURE__ */ jsx8(
-            "button",
-            {
-              id: "enable-animations-check",
-              role: "switch",
-              "aria-checked": isAnimationEnabled,
-              onClick: onToggleAnimation,
-              disabled: allDisabled,
-              className: `toggle-switch ${isAnimationEnabled ? "active" : ""}`,
-              children: /* @__PURE__ */ jsx8("span", { className: "toggle-switch-handle" })
-            }
-          )
+          /* @__PURE__ */ jsx10("label", { htmlFor: "enable-animations-check", className: "control-label", children: "Animations:" }),
+          /* @__PURE__ */ jsxs7("div", { className: "tooltip-container", onMouseEnter: () => setActiveTooltip("animations"), onMouseLeave: () => setActiveTooltip(null), children: [
+            /* @__PURE__ */ jsx10(
+              "button",
+              {
+                id: "enable-animations-check",
+                role: "switch",
+                "aria-checked": isAnimationEnabled,
+                onClick: onToggleAnimation,
+                disabled: allDisabled,
+                className: `toggle-switch ${isAnimationEnabled ? "active" : ""}`,
+                children: /* @__PURE__ */ jsx10("span", { className: "toggle-switch-handle" })
+              }
+            ),
+            activeTooltip === "animations" && /* @__PURE__ */ jsx10(Tooltip_default, { text: "Enables the piece sliding animation." })
+          ] })
+        ] }),
+        /* @__PURE__ */ jsxs7("div", { className: "control-row", children: [
+          /* @__PURE__ */ jsx10("label", { htmlFor: "enable-shake-check", className: "control-label", children: "Screen Shake:" }),
+          /* @__PURE__ */ jsxs7("div", { className: "tooltip-container", onMouseEnter: () => setActiveTooltip("shake"), onMouseLeave: () => setActiveTooltip(null), children: [
+            /* @__PURE__ */ jsx10(
+              "button",
+              {
+                id: "enable-shake-check",
+                role: "switch",
+                "aria-checked": isScreenShakeEnabled,
+                onClick: onToggleScreenShakeEnabled,
+                disabled: allDisabled,
+                className: `toggle-switch ${isScreenShakeEnabled ? "active" : ""}`,
+                children: /* @__PURE__ */ jsx10("span", { className: "toggle-switch-handle" })
+              }
+            ),
+            activeTooltip === "shake" && /* @__PURE__ */ jsx10(Tooltip_default, { text: "Adds a subtle shake effect when a piece lands." })
+          ] })
         ] }),
         "vibrate" in navigator && /* @__PURE__ */ jsxs7("div", { className: "control-row", children: [
-          /* @__PURE__ */ jsx8("label", { htmlFor: "enable-haptics-check", className: "control-label", children: "Vibrations:" }),
-          /* @__PURE__ */ jsx8(
-            "button",
-            {
-              id: "enable-haptics-check",
-              role: "switch",
-              "aria-checked": isHapticEnabled,
-              onClick: onToggleHapticEnabled,
-              disabled: allDisabled,
-              className: `toggle-switch ${isHapticEnabled ? "active" : ""}`,
-              children: /* @__PURE__ */ jsx8("span", { className: "toggle-switch-handle" })
-            }
-          )
+          /* @__PURE__ */ jsx10("label", { htmlFor: "enable-haptics-check", className: "control-label", children: "Vibrations:" }),
+          /* @__PURE__ */ jsxs7("div", { className: "tooltip-container", onMouseEnter: () => setActiveTooltip("haptics"), onMouseLeave: () => setActiveTooltip(null), children: [
+            /* @__PURE__ */ jsx10(
+              "button",
+              {
+                id: "enable-haptics-check",
+                role: "switch",
+                "aria-checked": isHapticEnabled,
+                onClick: onToggleHapticEnabled,
+                disabled: allDisabled,
+                className: `toggle-switch ${isHapticEnabled ? "active" : ""}`,
+                children: /* @__PURE__ */ jsx10("span", { className: "toggle-switch-handle" })
+              }
+            ),
+            activeTooltip === "haptics" && /* @__PURE__ */ jsx10(Tooltip_default, { text: "Enables vibration feedback on supported devices." })
+          ] })
         ] }),
         /* @__PURE__ */ jsxs7("div", { className: "control-row", children: [
-          /* @__PURE__ */ jsx8("label", { htmlFor: "theme-switcher", className: "control-label", children: "Theme:" }),
-          /* @__PURE__ */ jsx8(
-            "button",
-            {
-              id: "theme-switcher",
-              onClick: onToggleTheme,
-              disabled: allDisabled,
-              className: "control-button secondary-button w-1/2",
-              children: theme === "science" ? "Cosmic" : "Science"
-            }
-          )
+          /* @__PURE__ */ jsx10("label", { htmlFor: "theme-switcher", className: "control-label", children: "Theme:" }),
+          /* @__PURE__ */ jsxs7("div", { className: "tooltip-container w-1/2", onMouseEnter: () => setActiveTooltip("theme"), onMouseLeave: () => setActiveTooltip(null), children: [
+            /* @__PURE__ */ jsx10(
+              "button",
+              {
+                id: "theme-switcher",
+                onClick: onToggleTheme,
+                disabled: allDisabled,
+                className: "control-button secondary-button w-full",
+                children: theme === "science" ? "Cosmic" : "Science"
+              }
+            ),
+            activeTooltip === "theme" && /* @__PURE__ */ jsx10(Tooltip_default, { text: "Switch between the 'Science' and 'Cosmic' visual themes." })
+          ] })
         ] })
       ] }),
       activeTab === "about" && /* @__PURE__ */ jsxs7("div", { className: "animate-fade-in-fast text-sm", children: [
-        /* @__PURE__ */ jsx8(SectionHeader, { children: "Join the Community" }),
+        /* @__PURE__ */ jsx10(SectionHeader, { children: "Join the Community" }),
         /* @__PURE__ */ jsxs7("div", { className: "flex flex-col gap-2.5", children: [
-          /* @__PURE__ */ jsx8("a", { href: "https://sengle.itch.io/caz-connect", target: "_blank", rel: "noopener noreferrer", className: "control-button secondary-button text-center", children: "Support on Itch.io" }),
-          /* @__PURE__ */ jsx8("a", { href: "https://discord.gg/uAm43yApGY", target: "_blank", rel: "noopener noreferrer", className: "control-button secondary-button text-center", children: "Join our Discord" })
+          /* @__PURE__ */ jsx10("a", { href: "https://sengle.itch.io/caz-connect", target: "_blank", rel: "noopener noreferrer", className: "control-button secondary-button text-center", children: "Support on Itch.io" }),
+          /* @__PURE__ */ jsx10("a", { href: "https://discord.gg/uAm43yApGY", target: "_blank", rel: "noopener noreferrer", className: "control-button secondary-button text-center", children: "Join our Discord" })
         ] }),
-        /* @__PURE__ */ jsx8(SectionHeader, { children: "Think You Know Connect-Four? Think Again." }),
+        /* @__PURE__ */ jsx10(SectionHeader, { children: "Think You Know Connect-Four? Think Again." }),
         /* @__PURE__ */ jsxs7("p", { className: "mb-2", children: [
           'Deep in the halls of Cazenovia High, during an ordinary AP Science class, a new game was born. A few bored geeks took a classic concept and asked a simple question: what if you could only play on the edges? The result was "8 by 8", a strategic challenge that will change the way you think about connecting four. Years later, former student ',
-          /* @__PURE__ */ jsx8("strong", { children: "IJuan" }),
+          /* @__PURE__ */ jsx10("strong", { children: "IJuan" }),
           " rediscovered the rules and brought the game to the digital world for all to enjoy as ",
-          /* @__PURE__ */ jsx8("strong", { children: "Caz Connect" }),
+          /* @__PURE__ */ jsx10("strong", { children: "Caz Connect" }),
           "."
         ] }),
         /* @__PURE__ */ jsxs7("p", { className: "mb-4", children: [
           "Meet your host, ",
-          /* @__PURE__ */ jsx8("strong", { children: "Professor Caz" }),
+          /* @__PURE__ */ jsx10("strong", { children: "Professor Caz" }),
           ', the wise owl who has perfected this unique game of "four-way gravity." In his world, every piece must be supported. Your journey begins on the outer walls of the 8x8 grid. From there, you must build solid, unbroken lines of your pieces\u2014we call them "gravity bridges"\u2014to venture into the center of the board.'
         ] }),
-        /* @__PURE__ */ jsx8("p", { className: "mb-4", children: "Block your opponent, plan your bridges, and use the walls to your advantage to connect four of your pieces in any direction. With a highly intelligent AI featuring adjustable difficulty levels (from a friendly newcomer to a strategic expert) and a polished local multiplayer mode (and a beta online multiplayer mode), there's always a new challenge waiting." }),
-        /* @__PURE__ */ jsx8("p", { className: "mb-4", children: "Developed from a simple idea into a full-featured game, Caz Connect includes:" }),
+        /* @__PURE__ */ jsx10("p", { className: "mb-4", children: "Block your opponent, plan your bridges, and use the walls to your advantage to connect four of your pieces in any direction. With a highly intelligent AI featuring adjustable difficulty levels (from a friendly newcomer to a strategic expert) and a polished local multiplayer mode (and a beta online multiplayer mode), there's always a new challenge waiting." }),
+        /* @__PURE__ */ jsx10("p", { className: "mb-4", children: "Developed from a simple idea into a full-featured game, Caz Connect includes:" }),
         /* @__PURE__ */ jsxs7("ul", { className: "list-disc list-inside space-y-2 mb-4", children: [
           /* @__PURE__ */ jsxs7("li", { children: [
-            /* @__PURE__ */ jsx8("strong", { children: "A Whole New Spin on a Classic:" }),
+            /* @__PURE__ */ jsx10("strong", { children: "A Whole New Spin on a Classic:" }),
             ` The "Gravity Connection" rule changes everything! You can only place a piece if it has an unbroken line of other pieces connecting it to an outer wall. It's a simple concept with deep strategic complexity that will challenge you on every move.`
           ] }),
           /* @__PURE__ */ jsxs7("li", { children: [
-            /* @__PURE__ */ jsx8("strong", { children: "Challenge the Eccentric Professor Caz:" }),
+            /* @__PURE__ */ jsx10("strong", { children: "Challenge the Eccentric Professor Caz:" }),
             ' Face off against the legendary professor! Our advanced AI features multiple difficulty levels, from "Beginner" to the truly formidable "Grand Master." But be warned\u2014he learns.'
           ] }),
           /* @__PURE__ */ jsxs7("li", { children: [
-            /* @__PURE__ */ jsx8("strong", { children: "Unlock the Professor's Secret Lab:" }),
+            /* @__PURE__ */ jsx10("strong", { children: "Unlock the Professor's Secret Lab:" }),
             ` Prove your genius to gain access to the professor's inner sanctum. Here, you can train the AI through game simulations, import and export its "brain," and enable its advanced learning mode to create the ultimate opponent.`
           ] }),
           /* @__PURE__ */ jsxs7("li", { children: [
-            /* @__PURE__ */ jsx8("strong", { children: "Multiple Ways to Play:" }),
+            /* @__PURE__ */ jsx10("strong", { children: "Multiple Ways to Play:" }),
             " Go head-to-head with friends in local Player-vs-Player mode, take on the ever-improving AI, or share simple game codes for turn-based asynchronous online matches."
           ] }),
           /* @__PURE__ */ jsxs7("li", { children: [
-            /* @__PURE__ */ jsx8("strong", { children: "Personalize Your Game:" }),
+            /* @__PURE__ */ jsx10("strong", { children: "Personalize Your Game:" }),
             ' Choose your aesthetic\u2014the quirky chalk-and-notebook "Science" theme or the sleek, futuristic "Cosmic" theme. Customize your player name and piece to make your mark!'
           ] }),
           /* @__PURE__ */ jsxs7("li", { children: [
-            /* @__PURE__ */ jsx8("strong", { children: "Unlock Achievements & Track Your Stats:" }),
+            /* @__PURE__ */ jsx10("strong", { children: "Unlock Achievements & Track Your Stats:" }),
             " From your very first victory to the monumental feat of defeating the Grand Master, earn dozens of achievements and track your career stats to prove your intellectual dominance."
           ] }),
           /* @__PURE__ */ jsxs7("li", { children: [
-            /* @__PURE__ */ jsx8("strong", { children: "Installable & Offline-Ready:" }),
+            /* @__PURE__ */ jsx10("strong", { children: "Installable & Offline-Ready:" }),
             " As a Progressive Web App (PWA), you can install Caz Connect directly to your home screen for a full-screen, offline-ready experience anytime, anywhere."
           ] })
         ] }),
@@ -2942,53 +3433,65 @@ var Controls = ({
           disabled: allDisabled,
           className: "flex items-center justify-between w-full text-left disabled:opacity-50",
           children: [
-            /* @__PURE__ */ jsx8("span", { className: "text-sm font-bold uppercase tracking-wider section-header", children: "Professor's Lab (Training)" }),
-            /* @__PURE__ */ jsx8("svg", { className: `w-5 h-5 transition-transform duration-200 lab-arrow ${isLabOpen ? "transform rotate-180" : ""}`, fill: "none", stroke: "currentColor", viewBox: "0 0 24 24", xmlns: "http://www.w3.org/2000/svg", children: /* @__PURE__ */ jsx8("path", { strokeLinecap: "round", strokeLinejoin: "round", strokeWidth: "2", d: "M19 9l-7 7-7-7" }) })
+            /* @__PURE__ */ jsx10("span", { className: "text-sm font-bold uppercase tracking-wider section-header", children: "Professor's Lab (Training)" }),
+            /* @__PURE__ */ jsx10("svg", { className: `w-5 h-5 transition-transform duration-200 lab-arrow ${isLabOpen ? "transform rotate-180" : ""}`, fill: "none", stroke: "currentColor", viewBox: "0 0 24 24", xmlns: "http://www.w3.org/2000/svg", children: /* @__PURE__ */ jsx10("path", { strokeLinecap: "round", strokeLinejoin: "round", strokeWidth: "2", d: "M19 9l-7 7-7-7" }) })
           ]
         }
       ),
       isLabOpen && /* @__PURE__ */ jsxs7("div", { className: "flex flex-col gap-2.5 w-full mt-2 animate-fade-in", children: [
         /* @__PURE__ */ jsxs7("div", { className: "control-row", children: [
-          /* @__PURE__ */ jsx8("label", { htmlFor: "ai-learning-check", className: "control-label", title: "Allow Professor Caz to save game results to its memory on higher difficulties.", children: "Allow Professor Caz to Learn:" }),
-          /* @__PURE__ */ jsx8(
-            "button",
-            {
-              id: "ai-learning-check",
-              role: "switch",
-              "aria-checked": isAiLearningEnabled,
-              onClick: onToggleAiLearning,
-              disabled: allDisabled,
-              className: `toggle-switch ${isAiLearningEnabled ? "active" : ""}`,
-              children: /* @__PURE__ */ jsx8("span", { className: "toggle-switch-handle" })
-            }
-          )
+          /* @__PURE__ */ jsx10("label", { htmlFor: "ai-learning-check", className: "control-label", children: "Allow Professor Caz to Learn:" }),
+          /* @__PURE__ */ jsxs7("div", { className: "tooltip-container", onMouseEnter: () => setActiveTooltip("ai-learn"), onMouseLeave: () => setActiveTooltip(null), children: [
+            /* @__PURE__ */ jsx10(
+              "button",
+              {
+                id: "ai-learning-check",
+                role: "switch",
+                "aria-checked": isAiLearningEnabled,
+                onClick: onToggleAiLearning,
+                disabled: allDisabled,
+                className: `toggle-switch ${isAiLearningEnabled ? "active" : ""}`,
+                children: /* @__PURE__ */ jsx10("span", { className: "toggle-switch-handle" })
+              }
+            ),
+            activeTooltip === "ai-learn" && /* @__PURE__ */ jsx10(Tooltip_default, { text: "Enables AI to remember past games on higher difficulties." })
+          ] })
         ] }),
         /* @__PURE__ */ jsxs7("div", { className: "control-row", children: [
-          /* @__PURE__ */ jsx8("label", { htmlFor: "sim-games-input", className: "control-label", children: "Simulate Games:" }),
-          /* @__PURE__ */ jsx8(
-            "input",
-            {
-              type: "number",
-              id: "sim-games-input",
-              value: simGames,
-              onChange: (e) => setSimGames(parseInt(e.target.value, 10)),
-              min: "1",
-              max: "10000",
-              disabled: allDisabled,
-              className: "control-input w-24 text-center"
-            }
-          )
+          /* @__PURE__ */ jsx10("label", { htmlFor: "sim-games-input", className: "control-label", children: "Simulate Games:" }),
+          /* @__PURE__ */ jsxs7("div", { className: "tooltip-container", onMouseEnter: () => setActiveTooltip("sim-games"), onMouseLeave: () => setActiveTooltip(null), children: [
+            /* @__PURE__ */ jsx10(
+              "input",
+              {
+                type: "number",
+                id: "sim-games-input",
+                value: simGames,
+                onChange: (e) => setSimGames(parseInt(e.target.value, 10)),
+                min: "1",
+                max: "10000",
+                disabled: allDisabled,
+                className: "control-input w-24 text-center"
+              }
+            ),
+            activeTooltip === "sim-games" && /* @__PURE__ */ jsx10(Tooltip_default, { text: "Set how many games the AI plays against itself to learn." })
+          ] })
         ] }),
-        !isSimulating ? /* @__PURE__ */ jsx8("button", { onClick: () => onStartSimulation(simGames), disabled: isTutorialActive, className: "control-button secondary-button bg-green-500 text-white", children: "Start Training" }) : /* @__PURE__ */ jsx8("button", { onClick: onStopSimulation, className: "control-button primary-button", children: "Stop Training" }),
+        !isSimulating ? /* @__PURE__ */ jsx10("button", { onClick: () => onStartSimulation(simGames), disabled: isTutorialActive, className: "control-button secondary-button bg-green-500 text-white", children: "Start Training" }) : /* @__PURE__ */ jsx10("button", { onClick: onStopSimulation, className: "control-button primary-button", children: "Stop Training" }),
         /* @__PURE__ */ jsxs7("div", { className: "flex gap-2.5", children: [
-          /* @__PURE__ */ jsx8("button", { onClick: handleImportClick, disabled: allDisabled, className: "control-button secondary-button flex-grow", children: "Import Brain" }),
-          /* @__PURE__ */ jsx8("button", { onClick: onExportMemory, disabled: allDisabled, className: "control-button secondary-button flex-grow", children: "Export Brain" })
+          /* @__PURE__ */ jsxs7("div", { className: "tooltip-container flex-grow", onMouseEnter: () => setActiveTooltip("import-brain"), onMouseLeave: () => setActiveTooltip(null), children: [
+            /* @__PURE__ */ jsx10("button", { onClick: handleImportClick, disabled: allDisabled, className: "control-button secondary-button w-full", children: "Import Brain" }),
+            activeTooltip === "import-brain" && /* @__PURE__ */ jsx10(Tooltip_default, { text: "Load a previously exported AI 'brain' file." })
+          ] }),
+          /* @__PURE__ */ jsxs7("div", { className: "tooltip-container flex-grow", onMouseEnter: () => setActiveTooltip("export-brain"), onMouseLeave: () => setActiveTooltip(null), children: [
+            /* @__PURE__ */ jsx10("button", { onClick: onExportMemory, disabled: allDisabled, className: "control-button secondary-button w-full", children: "Export Brain" }),
+            activeTooltip === "export-brain" && /* @__PURE__ */ jsx10(Tooltip_default, { text: "Save the AI's current learned patterns to a file." })
+          ] })
         ] }),
-        /* @__PURE__ */ jsx8("input", { type: "file", ref: fileInputRef, onChange: handleFileChange, accept: ".json", className: "hidden" })
+        /* @__PURE__ */ jsx10("input", { type: "file", ref: fileInputRef, onChange: handleFileChange, accept: ".json", className: "hidden" })
       ] })
     ] }),
-    showReleaseNotesModal && /* @__PURE__ */ jsx8(ReleaseNotesModal_default, { onClose: () => setShowReleaseNotesModal(false) }),
-    /* @__PURE__ */ jsx8("style", { children: `
+    showReleaseNotesModal && /* @__PURE__ */ jsx10(ReleaseNotesModal_default, { onClose: () => setShowReleaseNotesModal(false) }),
+    /* @__PURE__ */ jsx10("style", { children: `
                 @keyframes fade-in { 
                     0% { opacity: 0; transform: translateY(-10px); } 
                     100% { opacity: 1; transform: translateY(0); } 
@@ -3006,36 +3509,36 @@ var Controls = ({
 var Controls_default = Controls;
 
 // components/InstallPrompt.tsx
-import { jsx as jsx9, jsxs as jsxs8 } from "react/jsx-runtime";
+import { jsx as jsx11, jsxs as jsxs8 } from "react/jsx-runtime";
 var InstallPrompt = ({ onInstall, onDismiss }) => {
-  return /* @__PURE__ */ jsx9("div", { className: "fixed bottom-0 left-0 right-0 p-4 z-50 transform translate-y-0 transition-transform duration-300 ease-in-out prompt-panel", children: /* @__PURE__ */ jsxs8("div", { className: "max-w-xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4 text-center sm:text-left", children: [
+  return /* @__PURE__ */ jsx11("div", { className: "fixed bottom-0 left-0 right-0 p-4 z-50 transform translate-y-0 transition-transform duration-300 ease-in-out prompt-panel", children: /* @__PURE__ */ jsxs8("div", { className: "max-w-xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4 text-center sm:text-left", children: [
     /* @__PURE__ */ jsxs8("div", { className: "flex-grow", children: [
-      /* @__PURE__ */ jsx9("h3", { className: "m-0 mb-1 text-lg font-semibold", children: "Install Caz Connect" }),
-      /* @__PURE__ */ jsx9("p", { className: "m-0 text-sm leading-snug", children: "Add to your Home Screen for a full-screen, offline experience!" })
+      /* @__PURE__ */ jsx11("h3", { className: "m-0 mb-1 text-lg font-semibold", children: "Install Caz Connect" }),
+      /* @__PURE__ */ jsx11("p", { className: "m-0 text-sm leading-snug", children: "Add to your Home Screen for a full-screen, offline experience!" })
     ] }),
     /* @__PURE__ */ jsxs8("div", { className: "flex gap-2.5 flex-shrink-0", children: [
-      /* @__PURE__ */ jsx9("button", { onClick: onInstall, className: "py-2 px-4 font-semibold rounded-lg bg-green-500 text-white", children: "Install" }),
-      /* @__PURE__ */ jsx9("button", { onClick: onDismiss, className: "py-2 px-4 font-semibold rounded-lg bg-slate-400/50 text-slate-800", children: "Later" })
+      /* @__PURE__ */ jsx11("button", { onClick: onInstall, className: "py-2 px-4 font-semibold rounded-lg bg-green-500 text-white", children: "Install" }),
+      /* @__PURE__ */ jsx11("button", { onClick: onDismiss, className: "py-2 px-4 font-semibold rounded-lg bg-slate-400/50 text-slate-800", children: "Later" })
     ] })
   ] }) });
 };
 var InstallPrompt_default = InstallPrompt;
 
 // components/TutorialMessage.tsx
-import { jsx as jsx10, jsxs as jsxs9 } from "react/jsx-runtime";
+import { jsx as jsx12, jsxs as jsxs9 } from "react/jsx-runtime";
 var TutorialMessage = ({ text, showNext, onNext, onSkip }) => {
   return /* @__PURE__ */ jsxs9("div", { className: "fixed bottom-0 left-0 right-0 p-4 z-50 transform translate-y-0 transition-transform duration-300 ease-in-out animate-slide-up prompt-panel", children: [
     /* @__PURE__ */ jsxs9("div", { className: "max-w-xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4 text-center sm:text-left", children: [
       /* @__PURE__ */ jsxs9("div", { className: "flex-grow", children: [
-        /* @__PURE__ */ jsx10("h3", { className: "m-0 mb-1 text-lg font-semibold", children: "Professor Caz's Lesson" }),
-        /* @__PURE__ */ jsx10("p", { className: "m-0 text-sm leading-snug", children: text })
+        /* @__PURE__ */ jsx12("h3", { className: "m-0 mb-1 text-lg font-semibold", children: "Professor Caz's Lesson" }),
+        /* @__PURE__ */ jsx12("p", { className: "m-0 text-sm leading-snug", children: text })
       ] }),
       /* @__PURE__ */ jsxs9("div", { className: "flex gap-2.5 flex-shrink-0", children: [
-        showNext && /* @__PURE__ */ jsx10("button", { onClick: onNext, className: "py-2 px-4 font-semibold rounded-lg bg-green-500 text-white", children: "Next" }),
-        /* @__PURE__ */ jsx10("button", { onClick: onSkip, className: "py-2 px-4 font-semibold rounded-lg bg-slate-400/50 text-slate-800", children: "Skip Tutorial" })
+        showNext && /* @__PURE__ */ jsx12("button", { onClick: onNext, className: "py-2 px-4 font-semibold rounded-lg bg-green-500 text-white", children: "Next" }),
+        /* @__PURE__ */ jsx12("button", { onClick: onSkip, className: "py-2 px-4 font-semibold rounded-lg bg-slate-400/50 text-slate-800", children: "Skip Tutorial" })
       ] })
     ] }),
-    /* @__PURE__ */ jsx10("style", { children: `
+    /* @__PURE__ */ jsx12("style", { children: `
                 @keyframes slide-up { 
                     0% { transform: translateY(100%); } 
                     100% { transform: translateY(0); } 
@@ -3048,7 +3551,7 @@ var TutorialMessage_default = TutorialMessage;
 
 // components/UnlockModal.tsx
 import { useState as useState6, useEffect as useEffect4 } from "react";
-import { jsx as jsx11, jsxs as jsxs10 } from "react/jsx-runtime";
+import { jsx as jsx13, jsxs as jsxs10 } from "react/jsx-runtime";
 var UnlockModal = ({ onDismiss }) => {
   const [isDismissible, setIsDismissible] = useState6(false);
   useEffect4(() => {
@@ -3074,7 +3577,7 @@ var UnlockModal = ({ onDismiss }) => {
             className: "component-panel rounded-lg p-8 max-w-sm w-full text-center relative transform animate-pop-in-modal",
             onClick: (e) => e.stopPropagation(),
             children: [
-              /* @__PURE__ */ jsx11(
+              /* @__PURE__ */ jsx13(
                 "img",
                 {
                   src: "./professor-caz.png",
@@ -3083,9 +3586,9 @@ var UnlockModal = ({ onDismiss }) => {
                   style: { borderColor: "var(--panel-border)" }
                 }
               ),
-              /* @__PURE__ */ jsx11("h2", { className: "text-2xl font-bold title-font", style: { color: "var(--text-header)" }, children: "Professor's Lab Unlocked!" }),
-              /* @__PURE__ */ jsx11("p", { className: "my-4 text-base", children: `"You've gained access to my secret lab! Here you can challenge the ultimate 'Learning' AI and utilize advanced training options. Experiment wisely."` }),
-              /* @__PURE__ */ jsx11(
+              /* @__PURE__ */ jsx13("h2", { className: "text-2xl font-bold title-font", style: { color: "var(--text-header)" }, children: "Professor's Lab Unlocked!" }),
+              /* @__PURE__ */ jsx13("p", { className: "my-4 text-base", children: `"You've gained access to my secret lab! Here you can challenge the ultimate 'Learning' AI and utilize advanced training options. Experiment wisely."` }),
+              /* @__PURE__ */ jsx13(
                 "button",
                 {
                   onClick: onDismiss,
@@ -3096,7 +3599,7 @@ var UnlockModal = ({ onDismiss }) => {
             ]
           }
         ),
-        /* @__PURE__ */ jsx11("style", { children: `
+        /* @__PURE__ */ jsx13("style", { children: `
                 @keyframes fade-in-fast { 
                     0% { opacity: 0; } 
                     100% { opacity: 1; } 
@@ -3117,8 +3620,8 @@ var UnlockModal_default = UnlockModal;
 
 // components/GameOverModal.tsx
 import { useState as useState7, useCallback as useCallback3, useMemo as useMemo3 } from "react";
-import { jsx as jsx12, jsxs as jsxs11 } from "react/jsx-runtime";
-var ShareIcon = ({ className }) => /* @__PURE__ */ jsx12("svg", { xmlns: "http://www.w3.org/2000/svg", viewBox: "0 0 24 24", fill: "currentColor", className, children: /* @__PURE__ */ jsx12("path", { d: "M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92 1.61 0 2.92-1.31 2.92-2.92s-1.31-2.92-2.92-2.92z" }) });
+import { jsx as jsx14, jsxs as jsxs11 } from "react/jsx-runtime";
+var ShareIcon = ({ className }) => /* @__PURE__ */ jsx14("svg", { xmlns: "http://www.w3.org/2000/svg", viewBox: "0 0 24 24", fill: "currentColor", className, children: /* @__PURE__ */ jsx14("path", { d: "M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92 1.61 0 2.92-1.31 2.92-2.92s-1.31-2.92-2.92-2.92z" }) });
 var GameOverModal = ({ board, winInfo, gameMode, onNewGame, onClose, stats, adaptiveLevel, isLabUnlocked, playerName, playerOName, levelChange }) => {
   const winner = winInfo ? board[winInfo[0][0].r][winInfo[0][0].c] : null;
   const [copySuccess, setCopySuccess] = useState7(false);
@@ -3139,7 +3642,7 @@ var GameOverModal = ({ board, winInfo, gameMode, onNewGame, onClose, stats, adap
   }
   const generateStatsGraph = useCallback3(() => {
     const BAR_LENGTH = 5;
-    const statsLines = LEVEL_NAMES.map((levelName, i) => {
+    const statsLines = AI_LEVELS.map((level, i) => {
       const levelStats = stats[i] || { wins: 0, losses: 0 };
       const totalGames = levelStats.wins + levelStats.losses;
       if (totalGames === 0) return null;
@@ -3147,7 +3650,7 @@ var GameOverModal = ({ board, winInfo, gameMode, onNewGame, onClose, stats, adap
       const filledBlocks = Math.round(winPercentage / 100 * BAR_LENGTH);
       const emptyBlocks = BAR_LENGTH - filledBlocks;
       const bar = "\u{1F7E9}".repeat(filledBlocks) + "\u2B1C\uFE0F".repeat(emptyBlocks);
-      return `${levelName.padEnd(12)}: ${bar} ${levelStats.wins}W / ${levelStats.losses}L`;
+      return `${level.name.padEnd(12)}: ${bar} ${levelStats.wins}W / ${levelStats.losses}L`;
     }).filter(Boolean);
     if (statsLines.length === 0) return "";
     return [
@@ -3177,7 +3680,7 @@ var GameOverModal = ({ board, winInfo, gameMode, onNewGame, onClose, stats, adap
     const resultText = winner ? `${winnerName} won!` : "It's a Draw!";
     const gameDetailsHeader = [
       `Caz Connect - ${resultText}`,
-      gameMode === "pvc" /* PvC */ ? `Difficulty: ${LEVEL_NAMES[adaptiveLevel]}` : null
+      gameMode === "pvc" /* PvC */ ? `Difficulty: ${AI_LEVELS[adaptiveLevel]?.name}` : null
     ].filter((line) => line !== null).join("\n");
     const statsGraph = gameMode === "pvc" /* PvC */ ? generateStatsGraph() : "";
     const shareText = [
@@ -3214,12 +3717,12 @@ var GameOverModal = ({ board, winInfo, gameMode, onNewGame, onClose, stats, adap
   }, [board, winInfo, gameMode, playerName, playerOName, winner, adaptiveLevel, generateStatsGraph, winPiecesSet]);
   const notification = levelChange && {
     promoted: {
-      text: `Promoted to ${LEVEL_NAMES[adaptiveLevel]}!`,
+      text: `Promoted to ${AI_LEVELS[adaptiveLevel]?.name}!`,
       icon: "\u{1F389}",
       className: "bg-green-100 text-green-800 border-green-300"
     },
     demoted: {
-      text: `Demoted to ${LEVEL_NAMES[adaptiveLevel]}.`,
+      text: `Demoted to ${AI_LEVELS[adaptiveLevel]?.name}.`,
       icon: "\u{1F4C9}",
       className: "bg-yellow-100 text-yellow-800 border-yellow-300"
     }
@@ -3236,27 +3739,27 @@ var GameOverModal = ({ board, winInfo, gameMode, onNewGame, onClose, stats, adap
             className: "component-panel rounded-lg p-6 max-w-md w-full text-center relative transform animate-pop-in-modal max-h-[90vh] overflow-y-auto",
             onClick: (e) => e.stopPropagation(),
             children: [
-              /* @__PURE__ */ jsx12("h2", { className: "text-4xl font-bold title-font mb-2", style: { color: "var(--text-header)" }, children: title }),
-              /* @__PURE__ */ jsx12("div", { className: "mini-board", children: board.map(
+              /* @__PURE__ */ jsx14("h2", { className: "text-4xl font-bold title-font mb-2", style: { color: "var(--text-header)" }, children: title }),
+              /* @__PURE__ */ jsx14("div", { className: "mini-board", children: board.map(
                 (row, r) => row.map((cell, c) => {
                   const isWinning = winPiecesSet.has(`${r}-${c}`);
-                  return /* @__PURE__ */ jsx12("div", { className: `mini-cell ${cell ? `player-${cell.toLowerCase()}` : ""} ${isWinning ? "winning" : ""}` }, `${r}-${c}`);
+                  return /* @__PURE__ */ jsx14("div", { className: `mini-cell ${cell ? `player-${cell.toLowerCase()}` : ""} ${isWinning ? "winning" : ""}` }, `${r}-${c}`);
                 })
               ) }),
               notification && /* @__PURE__ */ jsxs11("div", { className: `p-3 rounded-lg border text-center font-semibold mb-4 text-base animate-fade-in ${notification.className}`, children: [
-                /* @__PURE__ */ jsx12("span", { className: "mr-2", children: notification.icon }),
+                /* @__PURE__ */ jsx14("span", { className: "mr-2", children: notification.icon }),
                 notification.text
               ] }),
               gameMode === "pvc" /* PvC */ && /* @__PURE__ */ jsxs11("div", { className: "my-6 text-left", children: [
-                /* @__PURE__ */ jsx12("h3", { className: "text-lg font-bold mb-3 text-center section-header", children: "Player Records vs. Professor Caz" }),
-                /* @__PURE__ */ jsx12("div", { className: "space-y-3", children: LEVEL_NAMES.map((levelName, i) => {
+                /* @__PURE__ */ jsx14("h3", { className: "text-lg font-bold mb-3 text-center section-header", children: "Player Records vs. Professor Caz" }),
+                /* @__PURE__ */ jsx14("div", { className: "space-y-3", children: AI_LEVELS.map((level, i) => {
                   const levelStats = stats[i] || { wins: 0, losses: 0 };
                   const totalGames = levelStats.wins + levelStats.losses;
                   const winPercentage = totalGames > 0 ? Math.round(levelStats.wins / totalGames * 100) : 0;
                   return /* @__PURE__ */ jsxs11("div", { className: "grid grid-cols-[100px_1fr_80px] items-center gap-2 text-sm", children: [
-                    /* @__PURE__ */ jsx12("span", { className: "font-semibold truncate", children: levelName }),
+                    /* @__PURE__ */ jsx14("span", { className: "font-semibold truncate", children: level.name }),
                     /* @__PURE__ */ jsxs11("div", { className: "w-full stats-bar-container", children: [
-                      /* @__PURE__ */ jsx12("div", { className: "stats-bar-fill", style: { width: `${winPercentage}%` } }),
+                      /* @__PURE__ */ jsx14("div", { className: "stats-bar-fill", style: { width: `${winPercentage}%` } }),
                       totalGames > 0 && /* @__PURE__ */ jsxs11("span", { className: "stats-bar-text", children: [
                         winPercentage,
                         "%"
@@ -3268,7 +3771,7 @@ var GameOverModal = ({ board, winInfo, gameMode, onNewGame, onClose, stats, adap
                       " L:",
                       levelStats.losses
                     ] })
-                  ] }, levelName);
+                  ] }, level.name);
                 }) })
               ] }),
               /* @__PURE__ */ jsxs11("div", { className: "flex flex-col gap-2.5 mt-4", children: [
@@ -3278,13 +3781,13 @@ var GameOverModal = ({ board, winInfo, gameMode, onNewGame, onClose, stats, adap
                     onClick: handleShareGame,
                     className: "control-button secondary-button w-full flex items-center justify-center gap-2",
                     children: [
-                      /* @__PURE__ */ jsx12(ShareIcon, { className: "w-5 h-5" }),
-                      /* @__PURE__ */ jsx12("span", { children: copySuccess ? "Copied!" : "Share Game" })
+                      /* @__PURE__ */ jsx14(ShareIcon, { className: "w-5 h-5" }),
+                      /* @__PURE__ */ jsx14("span", { children: copySuccess ? "Copied!" : "Share Game" })
                     ]
                   }
                 ),
                 /* @__PURE__ */ jsxs11("div", { className: "grid grid-cols-2 gap-2.5", children: [
-                  /* @__PURE__ */ jsx12(
+                  /* @__PURE__ */ jsx14(
                     "button",
                     {
                       onClick: onClose,
@@ -3292,7 +3795,7 @@ var GameOverModal = ({ board, winInfo, gameMode, onNewGame, onClose, stats, adap
                       children: "View Board"
                     }
                   ),
-                  /* @__PURE__ */ jsx12(
+                  /* @__PURE__ */ jsx14(
                     "button",
                     {
                       onClick: onNewGame,
@@ -3305,7 +3808,7 @@ var GameOverModal = ({ board, winInfo, gameMode, onNewGame, onClose, stats, adap
             ]
           }
         ),
-        /* @__PURE__ */ jsx12("style", { children: `
+        /* @__PURE__ */ jsx14("style", { children: `
                 @keyframes fade-in-fast { 
                     0% { opacity: 0; } 
                     100% { opacity: 1; } 
@@ -3334,9 +3837,9 @@ var GameOverModal = ({ board, winInfo, gameMode, onNewGame, onClose, stats, adap
 var GameOverModal_default = GameOverModal;
 
 // components/RulesModal.tsx
-import { jsx as jsx13, jsxs as jsxs12 } from "react/jsx-runtime";
+import { jsx as jsx15, jsxs as jsxs12 } from "react/jsx-runtime";
 var RulesModal = ({ onClose, onStartTutorial }) => {
-  return /* @__PURE__ */ jsx13(
+  return /* @__PURE__ */ jsx15(
     "div",
     {
       className: "fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4 animate-fade-in-fast",
@@ -3347,24 +3850,24 @@ var RulesModal = ({ onClose, onStartTutorial }) => {
           className: "component-panel rounded-lg p-6 max-w-md w-full text-center relative transform animate-pop-in-modal max-h-[90vh] overflow-y-auto",
           onClick: (e) => e.stopPropagation(),
           children: [
-            /* @__PURE__ */ jsx13("h2", { className: "text-3xl font-bold title-font mb-4", style: { color: "var(--text-header)" }, children: "How to Play" }),
+            /* @__PURE__ */ jsx15("h2", { className: "text-3xl font-bold title-font mb-4", style: { color: "var(--text-header)" }, children: "How to Play" }),
             /* @__PURE__ */ jsxs12("div", { className: "my-6 text-left space-y-4 text-base", children: [
               /* @__PURE__ */ jsxs12("div", { children: [
-                /* @__PURE__ */ jsx13("h3", { className: "font-bold text-lg", style: { color: "var(--text-panel)" }, children: /* @__PURE__ */ jsx13("strong", { children: "Objective" }) }),
+                /* @__PURE__ */ jsx15("h3", { className: "font-bold text-lg", style: { color: "var(--text-panel)" }, children: /* @__PURE__ */ jsx15("strong", { children: "Objective" }) }),
                 /* @__PURE__ */ jsxs12("p", { children: [
                   "Be the first player to connect ",
-                  /* @__PURE__ */ jsx13("strong", { children: "four or more" }),
+                  /* @__PURE__ */ jsx15("strong", { children: "four or more" }),
                   " of your pieces in a continuous line\u2014horizontally, vertically, or diagonally!"
                 ] })
               ] }),
               /* @__PURE__ */ jsxs12("div", { children: [
-                /* @__PURE__ */ jsx13("h3", { className: "font-bold text-lg", style: { color: "var(--text-panel)" }, children: /* @__PURE__ */ jsx13("strong", { children: 'The "Gravity Connection" Rule' }) }),
-                /* @__PURE__ */ jsx13("p", { children: "This is the core rule! You can only place a piece in a square that has a straight, unbroken line of pieces connecting it to one of the outer walls." })
+                /* @__PURE__ */ jsx15("h3", { className: "font-bold text-lg", style: { color: "var(--text-panel)" }, children: /* @__PURE__ */ jsx15("strong", { children: 'The "Gravity Connection" Rule' }) }),
+                /* @__PURE__ */ jsx15("p", { children: "This is the core rule! You can only place a piece in a square that has a straight, unbroken line of pieces connecting it to one of the outer walls." })
               ] }),
-              /* @__PURE__ */ jsx13("div", { children: /* @__PURE__ */ jsx13("p", { className: "text-sm opacity-80 text-center mt-6", children: "Valid moves are highlighted on the board for the first two Professor Caz levels to help you learn." }) })
+              /* @__PURE__ */ jsx15("div", { children: /* @__PURE__ */ jsx15("p", { className: "text-sm opacity-80 text-center mt-6", children: "Valid moves are highlighted on the board for the first two Professor Caz levels to help you learn." }) })
             ] }),
             /* @__PURE__ */ jsxs12("div", { className: "grid grid-cols-2 gap-2.5 mt-4", children: [
-              /* @__PURE__ */ jsx13(
+              /* @__PURE__ */ jsx15(
                 "button",
                 {
                   onClick: onStartTutorial,
@@ -3372,197 +3875,12 @@ var RulesModal = ({ onClose, onStartTutorial }) => {
                   children: "Start Tutorial"
                 }
               ),
-              /* @__PURE__ */ jsx13(
+              /* @__PURE__ */ jsx15(
                 "button",
                 {
                   onClick: onClose,
                   className: "control-button primary-button",
                   children: "Got It!"
-                }
-              )
-            ] }),
-            /* @__PURE__ */ jsx13("style", { children: `
-                    @keyframes fade-in-fast { 
-                        0% { opacity: 0; } 
-                        100% { opacity: 1; } 
-                    }
-                    .animate-fade-in-fast { animation: fade-in-fast 0.2s ease-out; }
-
-                    @keyframes pop-in-modal { 
-                        0% { transform: scale(0.8) translateY(20px); opacity: 0; } 
-                        100% { transform: scale(1) translateY(0); opacity: 1; } 
-                    }
-                    .animate-pop-in-modal { animation: pop-in-modal 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94); }
-                ` })
-          ]
-        }
-      )
-    }
-  );
-};
-var RulesModal_default = RulesModal;
-
-// components/PlayerStatsModal.tsx
-import { useState as useState8, useMemo as useMemo4 } from "react";
-import { Fragment, jsx as jsx14, jsxs as jsxs13 } from "react/jsx-runtime";
-var CloseIcon = (props) => /* @__PURE__ */ jsx14("svg", { xmlns: "http://www.w3.org/2000/svg", viewBox: "0 0 24 24", fill: "currentColor", ...props, children: /* @__PURE__ */ jsx14("path", { d: "M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" }) });
-var BackIcon = (props) => /* @__PURE__ */ jsx14("svg", { xmlns: "http://www.w3.org/2000/svg", viewBox: "0 0 24 24", fill: "currentColor", ...props, children: /* @__PURE__ */ jsx14("path", { d: "M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z" }) });
-var PlayerStatsModal = ({ onClose, detailedStats, unlockedAchievements, aiStats, isLabUnlocked }) => {
-  const [activeTab, setActiveTab] = useState8("achievements");
-  const [selectedAchievement, setSelectedAchievement] = useState8(null);
-  const mostCommonOpening = useMemo4(() => {
-    const { openingMoves } = detailedStats;
-    if (!openingMoves || Object.keys(openingMoves).length === 0) {
-      return "N/A";
-    }
-    return Object.entries(openingMoves).reduce((a, b) => b[1] > a[1] ? b : a)[0];
-  }, [detailedStats.openingMoves]);
-  const avgGameLength = useMemo4(() => {
-    if (detailedStats.totalGamesVsAi === 0) {
-      return 0;
-    }
-    return Math.round(detailedStats.totalMoves / detailedStats.totalGamesVsAi);
-  }, [detailedStats.totalGamesVsAi, detailedStats.totalMoves]);
-  const achievementToShow = selectedAchievement ? ACHIEVEMENTS[selectedAchievement] : null;
-  const isSelectedAchievementUnlocked = selectedAchievement ? unlockedAchievements.includes(selectedAchievement) : false;
-  return /* @__PURE__ */ jsx14(
-    "div",
-    {
-      className: "fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4 animate-fade-in-fast",
-      onClick: onClose,
-      children: /* @__PURE__ */ jsxs13(
-        "div",
-        {
-          className: "component-panel rounded-lg p-6 max-w-lg w-full text-center relative transform animate-pop-in-modal max-h-[90vh] flex flex-col",
-          onClick: (e) => e.stopPropagation(),
-          children: [
-            /* @__PURE__ */ jsx14("button", { onClick: onClose, className: "absolute top-3 right-3 p-1 rounded-full hover:bg-[var(--button-secondary-hover-bg)] transition-colors", "aria-label": "Close", children: /* @__PURE__ */ jsx14(CloseIcon, { className: "w-6 h-6", style: { color: "var(--button-secondary-text)" } }) }),
-            !selectedAchievement ? /* @__PURE__ */ jsx14("h2", { className: "text-3xl font-bold title-font mb-4", style: { color: "var(--text-header)" }, children: "Player Stats" }) : /* @__PURE__ */ jsx14("div", { className: "flex items-center justify-start relative mb-4 h-[44px]", children: /* @__PURE__ */ jsxs13("button", { onClick: () => setSelectedAchievement(null), className: "absolute left-0 top-1/2 -translate-y-1/2 flex items-center gap-1 control-button secondary-button !border-none !px-2 !py-1", "aria-label": "Back to achievements", children: [
-              /* @__PURE__ */ jsx14(BackIcon, { className: "w-6 h-6" }),
-              " Back"
-            ] }) }),
-            !selectedAchievement ? /* @__PURE__ */ jsxs13("div", { className: "tab-nav -mx-6 px-4", children: [
-              /* @__PURE__ */ jsx14("button", { className: `tab-button ${activeTab === "achievements" ? "active" : ""}`, onClick: () => setActiveTab("achievements"), children: "Achievements" }),
-              /* @__PURE__ */ jsx14("button", { className: `tab-button ${activeTab === "stats" ? "active" : ""}`, onClick: () => setActiveTab("stats"), children: "Statistics" })
-            ] }) : /* @__PURE__ */ jsx14("div", { className: "border-b-2", style: { borderColor: "var(--panel-border)" } }),
-            /* @__PURE__ */ jsx14("div", { className: "overflow-y-auto mt-4 pr-2 -mr-2", children: selectedAchievement && achievementToShow ? /* @__PURE__ */ jsxs13("div", { className: "text-center p-4 animate-fade-in-fast flex flex-col items-center gap-4", children: [
-              /* @__PURE__ */ jsx14("span", { className: `text-7xl transition-all ${!isSelectedAchievementUnlocked ? "filter grayscale" : ""}`, children: achievementToShow.icon }),
-              /* @__PURE__ */ jsx14("h3", { className: "text-2xl font-bold title-font", style: { color: "var(--text-header)" }, children: achievementToShow.name }),
-              /* @__PURE__ */ jsx14("p", { className: "text-base italic opacity-90", children: isSelectedAchievementUnlocked ? achievementToShow.description : achievementToShow.lockedDescription || "Keep playing to unlock this secret achievement!" }),
-              !isSelectedAchievementUnlocked && achievementToShow.lockedDescription && /* @__PURE__ */ jsx14("p", { className: "text-xs mt-2", children: 'Professor Caz says: "A true master finds their own path..."' })
-            ] }) : /* @__PURE__ */ jsxs13(Fragment, { children: [
-              activeTab === "achievements" && /* @__PURE__ */ jsx14("div", { className: "grid grid-cols-2 sm:grid-cols-3 gap-4 text-center animate-fade-in-fast", children: Object.keys(ACHIEVEMENTS).map((id) => {
-                const achievement = ACHIEVEMENTS[id];
-                const isUnlocked = unlockedAchievements.includes(id);
-                const descriptionToShow = isUnlocked ? achievement.description : achievement.lockedDescription || achievement.description;
-                return /* @__PURE__ */ jsxs13(
-                  "button",
-                  {
-                    onClick: () => setSelectedAchievement(id),
-                    className: `p-4 rounded-lg flex flex-col items-center justify-start gap-2 transition-all duration-300 text-left cursor-pointer ${isUnlocked ? "opacity-100" : "opacity-50 filter grayscale"}`,
-                    style: { backgroundColor: "rgba(0,0,0,0.05)" },
-                    "aria-label": `View details for ${achievement.name}`,
-                    children: [
-                      /* @__PURE__ */ jsx14("span", { className: "text-5xl", children: achievement.icon }),
-                      /* @__PURE__ */ jsx14("h4", { className: "font-bold text-sm m-0 leading-tight text-center w-full", children: achievement.name }),
-                      /* @__PURE__ */ jsx14("p", { className: "text-xs m-0 leading-snug hidden sm:block text-center w-full", children: descriptionToShow })
-                    ]
-                  },
-                  id
-                );
-              }) }),
-              activeTab === "stats" && /* @__PURE__ */ jsxs13("div", { className: "text-left animate-fade-in-fast", children: [
-                /* @__PURE__ */ jsx14("h3", { className: "text-lg font-bold mb-3 text-center section-header", children: "Career Stats" }),
-                /* @__PURE__ */ jsxs13("div", { className: "grid grid-cols-3 gap-2 text-center component-panel bg-opacity-10 p-3 rounded-lg border-none shadow-inner", children: [
-                  /* @__PURE__ */ jsxs13("div", { className: "flex flex-col", children: [
-                    /* @__PURE__ */ jsx14("span", { className: "font-bold text-2xl", style: { color: "var(--text-header)" }, children: detailedStats.maxWinStreak }),
-                    /* @__PURE__ */ jsx14("span", { className: "text-xs opacity-80", children: "Max Streak" })
-                  ] }),
-                  /* @__PURE__ */ jsxs13("div", { className: "flex flex-col", children: [
-                    /* @__PURE__ */ jsx14("span", { className: "font-bold text-2xl", style: { color: "var(--text-header)" }, children: avgGameLength }),
-                    /* @__PURE__ */ jsx14("span", { className: "text-xs opacity-80", children: "Avg. Moves" })
-                  ] }),
-                  /* @__PURE__ */ jsxs13("div", { className: "flex flex-col", children: [
-                    /* @__PURE__ */ jsx14("span", { className: "font-bold text-2xl", style: { color: "var(--text-header)" }, children: mostCommonOpening }),
-                    /* @__PURE__ */ jsx14("span", { className: "text-xs opacity-80", children: "Favorite Start" })
-                  ] })
-                ] }),
-                /* @__PURE__ */ jsx14("h3", { className: "text-lg font-bold my-3 text-center section-header", children: "vs. Professor Caz" }),
-                /* @__PURE__ */ jsx14("div", { className: "space-y-3", children: LEVEL_NAMES.map((levelName, i) => {
-                  const levelStats = aiStats[i] || { wins: 0, losses: 0 };
-                  const totalGames = levelStats.wins + levelStats.losses;
-                  const winPercentage = totalGames > 0 ? Math.round(levelStats.wins / totalGames * 100) : 0;
-                  return /* @__PURE__ */ jsxs13("div", { className: "grid grid-cols-[100px_1fr_80px] items-center gap-2 text-sm", children: [
-                    /* @__PURE__ */ jsx14("span", { className: "font-semibold truncate", children: levelName }),
-                    /* @__PURE__ */ jsxs13("div", { className: "w-full stats-bar-container", children: [
-                      /* @__PURE__ */ jsx14("div", { className: "stats-bar-fill", style: { width: `${winPercentage}%` } }),
-                      totalGames > 0 && /* @__PURE__ */ jsxs13("span", { className: "stats-bar-text", children: [
-                        winPercentage,
-                        "%"
-                      ] })
-                    ] }),
-                    /* @__PURE__ */ jsxs13("span", { className: "text-right tabular-nums", children: [
-                      "W:",
-                      levelStats.wins,
-                      " L:",
-                      levelStats.losses
-                    ] })
-                  ] }, levelName);
-                }) })
-              ] })
-            ] }) }),
-            /* @__PURE__ */ jsx14("style", { children: `
-                    @keyframes fade-in-fast { 
-                        0% { opacity: 0; } 
-                        100% { opacity: 1; } 
-                    }
-                    .animate-fade-in-fast { animation: fade-in-fast 0.2s ease-out; }
-
-                    @keyframes pop-in-modal { 
-                        0% { transform: scale(0.8) translateY(20px); opacity: 0; } 
-                        100% { transform: scale(1) translateY(0); opacity: 1; } 
-                    }
-                    .animate-pop-in-modal { animation: pop-in-modal 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94); }
-                ` })
-          ]
-        }
-      )
-    }
-  );
-};
-var PlayerStatsModal_default = PlayerStatsModal;
-
-// components/ConfirmModal.tsx
-import { jsx as jsx15, jsxs as jsxs14 } from "react/jsx-runtime";
-var ConfirmModal = ({ title, message, confirmText = "Confirm", onConfirm, onCancel }) => {
-  return /* @__PURE__ */ jsx15(
-    "div",
-    {
-      className: "fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4 animate-fade-in-fast",
-      onClick: onCancel,
-      children: /* @__PURE__ */ jsxs14(
-        "div",
-        {
-          className: "component-panel rounded-lg p-6 max-w-sm w-full text-center relative transform animate-pop-in-modal",
-          onClick: (e) => e.stopPropagation(),
-          children: [
-            /* @__PURE__ */ jsx15("h2", { className: "text-2xl font-bold title-font mb-4", style: { color: "var(--text-header)" }, children: title }),
-            /* @__PURE__ */ jsx15("p", { className: "my-6 text-base", children: message }),
-            /* @__PURE__ */ jsxs14("div", { className: "grid grid-cols-2 gap-2.5 mt-4", children: [
-              /* @__PURE__ */ jsx15(
-                "button",
-                {
-                  onClick: onCancel,
-                  className: "control-button secondary-button",
-                  children: "Cancel"
-                }
-              ),
-              /* @__PURE__ */ jsx15(
-                "button",
-                {
-                  onClick: onConfirm,
-                  className: "control-button primary-button",
-                  children: confirmText
                 }
               )
             ] }),
@@ -3585,27 +3903,225 @@ var ConfirmModal = ({ title, message, confirmText = "Confirm", onConfirm, onCanc
     }
   );
 };
+var RulesModal_default = RulesModal;
+
+// components/PlayerStatsModal.tsx
+import { useState as useState8, useMemo as useMemo4, useEffect as useEffect5 } from "react";
+import { Fragment, jsx as jsx16, jsxs as jsxs13 } from "react/jsx-runtime";
+var CloseIcon = (props) => /* @__PURE__ */ jsx16("svg", { xmlns: "http://www.w3.org/2000/svg", viewBox: "0 0 24 24", fill: "currentColor", ...props, children: /* @__PURE__ */ jsx16("path", { d: "M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" }) });
+var BackIcon = (props) => /* @__PURE__ */ jsx16("svg", { xmlns: "http://www.w3.org/2000/svg", viewBox: "0 0 24 24", fill: "currentColor", ...props, children: /* @__PURE__ */ jsx16("path", { d: "M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z" }) });
+var PlayerStatsModal = ({ onClose, detailedStats, unlockedAchievements, aiStats, isLabUnlocked }) => {
+  const [activeTab, setActiveTab] = useState8("achievements");
+  const [selectedAchievement, setSelectedAchievement] = useState8(null);
+  const [hintId, setHintId] = useState8(null);
+  useEffect5(() => {
+    if (hintId) {
+      const timer = setTimeout(() => {
+        setHintId(null);
+      }, 4e3);
+      return () => clearTimeout(timer);
+    }
+  }, [hintId]);
+  const mostCommonOpening = useMemo4(() => {
+    const { openingMoves } = detailedStats;
+    if (!openingMoves || Object.keys(openingMoves).length === 0) {
+      return "N/A";
+    }
+    return Object.entries(openingMoves).reduce((a, b) => b[1] > a[1] ? b : a)[0];
+  }, [detailedStats.openingMoves]);
+  const avgGameLength = useMemo4(() => {
+    if (detailedStats.totalGamesVsAi === 0) {
+      return 0;
+    }
+    return Math.round(detailedStats.totalMoves / detailedStats.totalGamesVsAi);
+  }, [detailedStats.totalGamesVsAi, detailedStats.totalMoves]);
+  const achievementToShow = selectedAchievement ? ACHIEVEMENTS[selectedAchievement] : null;
+  return /* @__PURE__ */ jsx16(
+    "div",
+    {
+      className: "fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4 animate-fade-in-fast",
+      onClick: onClose,
+      children: /* @__PURE__ */ jsxs13(
+        "div",
+        {
+          className: "component-panel rounded-lg p-6 max-w-lg w-full text-center relative transform animate-pop-in-modal max-h-[90vh] flex flex-col",
+          onClick: (e) => e.stopPropagation(),
+          children: [
+            /* @__PURE__ */ jsx16("button", { onClick: onClose, className: "absolute top-3 right-3 p-1 rounded-full hover:bg-[var(--button-secondary-hover-bg)] transition-colors", "aria-label": "Close", children: /* @__PURE__ */ jsx16(CloseIcon, { className: "w-6 h-6", style: { color: "var(--button-secondary-text)" } }) }),
+            !selectedAchievement ? /* @__PURE__ */ jsx16("h2", { className: "text-3xl font-bold title-font mb-4", style: { color: "var(--text-header)" }, children: "Player Stats" }) : /* @__PURE__ */ jsx16("div", { className: "flex items-center justify-start relative mb-4 h-[44px]", children: /* @__PURE__ */ jsxs13("button", { onClick: () => setSelectedAchievement(null), className: "absolute left-0 top-1/2 -translate-y-1/2 flex items-center gap-1 control-button secondary-button !border-none !px-2 !py-1", "aria-label": "Back to achievements", children: [
+              /* @__PURE__ */ jsx16(BackIcon, { className: "w-6 h-6" }),
+              " Back"
+            ] }) }),
+            !selectedAchievement ? /* @__PURE__ */ jsxs13("div", { className: "tab-nav -mx-6 px-4", children: [
+              /* @__PURE__ */ jsx16("button", { className: `tab-button ${activeTab === "achievements" ? "active" : ""}`, onClick: () => setActiveTab("achievements"), children: "Achievements" }),
+              /* @__PURE__ */ jsx16("button", { className: `tab-button ${activeTab === "stats" ? "active" : ""}`, onClick: () => setActiveTab("stats"), children: "Statistics" })
+            ] }) : /* @__PURE__ */ jsx16("div", { className: "border-b-2", style: { borderColor: "var(--panel-border)" } }),
+            /* @__PURE__ */ jsx16("div", { className: "overflow-y-auto mt-4 pr-2 -mr-2", children: selectedAchievement && achievementToShow ? /* @__PURE__ */ jsxs13("div", { className: "text-center p-4 animate-fade-in-fast flex flex-col items-center gap-4", children: [
+              /* @__PURE__ */ jsx16("span", { className: "text-7xl", children: achievementToShow.icon }),
+              /* @__PURE__ */ jsx16("h3", { className: "text-2xl font-bold title-font", style: { color: "var(--text-header)" }, children: achievementToShow.name }),
+              /* @__PURE__ */ jsx16("p", { className: "text-base", children: achievementToShow.description })
+            ] }) : /* @__PURE__ */ jsxs13(Fragment, { children: [
+              activeTab === "achievements" && /* @__PURE__ */ jsx16("div", { className: "grid grid-cols-2 sm:grid-cols-3 gap-4 text-center animate-fade-in-fast", children: Object.keys(ACHIEVEMENTS).map((id) => {
+                const achievement = ACHIEVEMENTS[id];
+                const isUnlocked = unlockedAchievements.includes(id);
+                const descriptionToShow = isUnlocked ? achievement.description : hintId === id ? achievement.lockedHint || achievement.lockedDescription : achievement.lockedDescription || achievement.description;
+                return /* @__PURE__ */ jsxs13(
+                  "button",
+                  {
+                    onClick: () => {
+                      if (isUnlocked) {
+                        setSelectedAchievement(id);
+                      } else if (achievement.lockedHint) {
+                        setHintId(id);
+                      }
+                    },
+                    className: `p-4 rounded-lg flex flex-col items-center justify-start gap-2 transition-all duration-300 text-left cursor-pointer ${isUnlocked ? "opacity-100" : "opacity-40 filter grayscale"}`,
+                    style: { backgroundColor: "rgba(0,0,0,0.05)" },
+                    "aria-label": `View details for ${achievement.name}`,
+                    children: [
+                      /* @__PURE__ */ jsx16("span", { className: "text-5xl", children: achievement.icon }),
+                      /* @__PURE__ */ jsx16("h4", { className: "font-bold text-sm m-0 leading-tight text-center w-full", children: achievement.name }),
+                      /* @__PURE__ */ jsx16("p", { className: "text-xs m-0 leading-snug text-center w-full animate-fade-in-fast", children: descriptionToShow }, descriptionToShow)
+                    ]
+                  },
+                  id
+                );
+              }) }),
+              activeTab === "stats" && /* @__PURE__ */ jsxs13("div", { className: "text-left animate-fade-in-fast", children: [
+                /* @__PURE__ */ jsx16("h3", { className: "text-lg font-bold mb-3 text-center section-header", children: "Career Stats" }),
+                /* @__PURE__ */ jsxs13("div", { className: "grid grid-cols-3 gap-2 text-center component-panel bg-opacity-10 p-3 rounded-lg border-none shadow-inner", children: [
+                  /* @__PURE__ */ jsxs13("div", { className: "flex flex-col", children: [
+                    /* @__PURE__ */ jsx16("span", { className: "font-bold text-2xl", style: { color: "var(--text-header)" }, children: detailedStats.maxWinStreak }),
+                    /* @__PURE__ */ jsx16("span", { className: "text-xs opacity-80", children: "Max Streak" })
+                  ] }),
+                  /* @__PURE__ */ jsxs13("div", { className: "flex flex-col", children: [
+                    /* @__PURE__ */ jsx16("span", { className: "font-bold text-2xl", style: { color: "var(--text-header)" }, children: avgGameLength }),
+                    /* @__PURE__ */ jsx16("span", { className: "text-xs opacity-80", children: "Avg. Moves" })
+                  ] }),
+                  /* @__PURE__ */ jsxs13("div", { className: "flex flex-col", children: [
+                    /* @__PURE__ */ jsx16("span", { className: "font-bold text-2xl", style: { color: "var(--text-header)" }, children: mostCommonOpening }),
+                    /* @__PURE__ */ jsx16("span", { className: "text-xs opacity-80", children: "Favorite Start" })
+                  ] })
+                ] }),
+                /* @__PURE__ */ jsx16("h3", { className: "text-lg font-bold my-3 text-center section-header", children: "vs. Professor Caz" }),
+                /* @__PURE__ */ jsx16("div", { className: "space-y-3", children: AI_LEVELS.map((level, i) => {
+                  const levelStats = aiStats[i] || { wins: 0, losses: 0 };
+                  const totalGames = levelStats.wins + levelStats.losses;
+                  const winPercentage = totalGames > 0 ? Math.round(levelStats.wins / totalGames * 100) : 0;
+                  return /* @__PURE__ */ jsxs13("div", { className: "grid grid-cols-[100px_1fr_80px] items-center gap-2 text-sm", children: [
+                    /* @__PURE__ */ jsx16("span", { className: "font-semibold truncate", children: level.name }),
+                    /* @__PURE__ */ jsxs13("div", { className: "w-full stats-bar-container", children: [
+                      /* @__PURE__ */ jsx16("div", { className: "stats-bar-fill", style: { width: `${winPercentage}%` } }),
+                      totalGames > 0 && /* @__PURE__ */ jsxs13("span", { className: "stats-bar-text", children: [
+                        winPercentage,
+                        "%"
+                      ] })
+                    ] }),
+                    /* @__PURE__ */ jsxs13("span", { className: "text-right tabular-nums", children: [
+                      "W:",
+                      levelStats.wins,
+                      " L:",
+                      levelStats.losses
+                    ] })
+                  ] }, level.name);
+                }) })
+              ] })
+            ] }) }),
+            /* @__PURE__ */ jsx16("style", { children: `
+                    @keyframes fade-in-fast { 
+                        0% { opacity: 0; } 
+                        100% { opacity: 1; } 
+                    }
+                    .animate-fade-in-fast { animation: fade-in-fast 0.2s ease-out; }
+
+                    @keyframes pop-in-modal { 
+                        0% { transform: scale(0.8) translateY(20px); opacity: 0; } 
+                        100% { transform: scale(1) translateY(0); opacity: 1; } 
+                    }
+                    .animate-pop-in-modal { animation: pop-in-modal 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94); }
+                ` })
+          ]
+        }
+      )
+    }
+  );
+};
+var PlayerStatsModal_default = PlayerStatsModal;
+
+// components/ConfirmModal.tsx
+import { jsx as jsx17, jsxs as jsxs14 } from "react/jsx-runtime";
+var ConfirmModal = ({ title, message, confirmText = "Confirm", onConfirm, onCancel }) => {
+  return /* @__PURE__ */ jsx17(
+    "div",
+    {
+      className: "fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4 animate-fade-in-fast",
+      onClick: onCancel,
+      children: /* @__PURE__ */ jsxs14(
+        "div",
+        {
+          className: "component-panel rounded-lg p-6 max-w-sm w-full text-center relative transform animate-pop-in-modal",
+          onClick: (e) => e.stopPropagation(),
+          children: [
+            /* @__PURE__ */ jsx17("h2", { className: "text-2xl font-bold title-font mb-4", style: { color: "var(--text-header)" }, children: title }),
+            /* @__PURE__ */ jsx17("p", { className: "my-6 text-base", children: message }),
+            /* @__PURE__ */ jsxs14("div", { className: "grid grid-cols-2 gap-2.5 mt-4", children: [
+              /* @__PURE__ */ jsx17(
+                "button",
+                {
+                  onClick: onCancel,
+                  className: "control-button secondary-button",
+                  children: "Cancel"
+                }
+              ),
+              /* @__PURE__ */ jsx17(
+                "button",
+                {
+                  onClick: onConfirm,
+                  className: "control-button primary-button",
+                  children: confirmText
+                }
+              )
+            ] }),
+            /* @__PURE__ */ jsx17("style", { children: `
+                    @keyframes fade-in-fast { 
+                        0% { opacity: 0; } 
+                        100% { opacity: 1; } 
+                    }
+                    .animate-fade-in-fast { animation: fade-in-fast 0.2s ease-out; }
+
+                    @keyframes pop-in-modal { 
+                        0% { transform: scale(0.8) translateY(20px); opacity: 0; } 
+                        100% { transform: scale(1) translateY(0); opacity: 1; } 
+                    }
+                    .animate-pop-in-modal { animation: pop-in-modal 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94); }
+                ` })
+          ]
+        }
+      )
+    }
+  );
+};
 var ConfirmModal_default = ConfirmModal;
 
 // components/UpdatePrompt.tsx
-import { jsx as jsx16, jsxs as jsxs15 } from "react/jsx-runtime";
+import { jsx as jsx18, jsxs as jsxs15 } from "react/jsx-runtime";
 var UpdatePrompt = ({ onUpdate }) => {
-  return /* @__PURE__ */ jsx16("div", { className: "fixed bottom-0 left-0 right-0 p-4 z-50 transform translate-y-0 transition-transform duration-300 ease-in-out prompt-panel", children: /* @__PURE__ */ jsxs15("div", { className: "max-w-xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4 text-center sm:text-left", children: [
+  return /* @__PURE__ */ jsx18("div", { className: "fixed bottom-0 left-0 right-0 p-4 z-50 transform translate-y-0 transition-transform duration-300 ease-in-out prompt-panel", children: /* @__PURE__ */ jsxs15("div", { className: "max-w-xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4 text-center sm:text-left", children: [
     /* @__PURE__ */ jsxs15("div", { className: "flex-grow", children: [
-      /* @__PURE__ */ jsx16("h3", { className: "m-0 mb-1 text-lg font-semibold", children: "Update Available" }),
-      /* @__PURE__ */ jsx16("p", { className: "m-0 text-sm leading-snug", children: "A new version of Caz Connect is ready. Reload to get the latest features!" })
+      /* @__PURE__ */ jsx18("h3", { className: "m-0 mb-1 text-lg font-semibold", children: "Update Available" }),
+      /* @__PURE__ */ jsx18("p", { className: "m-0 text-sm leading-snug", children: "A new version of Caz Connect is ready. Reload to get the latest features!" })
     ] }),
-    /* @__PURE__ */ jsx16("div", { className: "flex gap-2.5 flex-shrink-0", children: /* @__PURE__ */ jsx16("button", { onClick: onUpdate, className: "py-2 px-4 font-semibold rounded-lg bg-green-500 text-white", children: "Reload" }) })
+    /* @__PURE__ */ jsx18("div", { className: "flex gap-2.5 flex-shrink-0", children: /* @__PURE__ */ jsx18("button", { onClick: onUpdate, className: "py-2 px-4 font-semibold rounded-lg bg-green-500 text-white", children: "Reload" }) })
   ] }) });
 };
 var UpdatePrompt_default = UpdatePrompt;
 
 // App.tsx
-import { jsx as jsx17, jsxs as jsxs16 } from "react/jsx-runtime";
-var VolumeOnIcon = () => /* @__PURE__ */ jsx17("svg", { xmlns: "http://www.w3.org/2000/svg", viewBox: "0 0 24 24", fill: "currentColor", children: /* @__PURE__ */ jsx17("path", { d: "M13.5 4.06c0-1.34-1.61-2.25-2.83-1.46L5.43 6H3a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h2.43l5.24 3.4c1.22.79 2.83-.12 2.83-1.46V4.06zM18.5 12c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM20 12c0 2.76-1.74 5.09-4.01 6.04v-12c2.27.95 4.01 3.27 4.01 5.96z" }) });
-var VolumeOffIcon = () => /* @__PURE__ */ jsx17("svg", { xmlns: "http://www.w3.org/2000/svg", viewBox: "0 0 24 24", fill: "currentColor", children: /* @__PURE__ */ jsx17("path", { d: "M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3a1 1 0 0 0-1 1v4a1 1 0 0 0 1 1h3.73L12 18.27v-5.52l4.51 4.51c-.67.43-1.4.76-2.18.98v2.06a8.99 8.99 0 0 0 3.65-1.49L19.73 21 21 19.73l-9-9L4.27 3zM12 4.06L7.22 7.54 12 12.31V4.06z" }) });
-var QuestionMarkIcon = () => /* @__PURE__ */ jsx17("svg", { xmlns: "http://www.w3.org/2000/svg", viewBox: "0 0 24 24", fill: "currentColor", children: /* @__PURE__ */ jsx17("path", { d: "M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17h-2v-2h2v2zm2.07-7.75l-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H8c0-2.21 1.79-4 4-4s4 1.79 4 4c0 .88-.36 1.68-.93 2.25z" }) });
-var TrophyIcon = () => /* @__PURE__ */ jsx17("svg", { xmlns: "http://www.w3.org/2000/svg", viewBox: "0 0 24 24", fill: "currentColor", children: /* @__PURE__ */ jsx17("path", { d: "M19 5h-2V3H7v2H5c-1.1 0-2 .9-2 2v1c0 2.55 1.92 4.63 4.39 4.94.63 1.5 1.98 2.63 3.61 2.96V19H7v2h10v-2h-4v-3.1c1.63-.33 2.98-1.46 3.61-2.96C19.08 12.63 21 10.55 21 8V7c0-1.1-.9-2-2-2zM5 8V7h2v3.82C5.84 10.4 5 9.3 5 8zm7 6c-1.65 0-3-1.35-3-3V3h6v10c0 1.65-1.35 3-3 3zm7-6c0 1.3-.84 2.4-2 2.82V7h2v1z" }) });
+import { jsx as jsx19, jsxs as jsxs16 } from "react/jsx-runtime";
+var VolumeOnIcon = () => /* @__PURE__ */ jsx19("svg", { xmlns: "http://www.w3.org/2000/svg", viewBox: "0 0 24 24", fill: "currentColor", children: /* @__PURE__ */ jsx19("path", { d: "M13.5 4.06c0-1.34-1.61-2.25-2.83-1.46L5.43 6H3a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h2.43l5.24 3.4c1.22.79 2.83-.12 2.83-1.46V4.06zM18.5 12c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM20 12c0 2.76-1.74 5.09-4.01 6.04v-12c2.27.95 4.01 3.27 4.01 5.96z" }) });
+var VolumeOffIcon = () => /* @__PURE__ */ jsx19("svg", { xmlns: "http://www.w3.org/2000/svg", viewBox: "0 0 24 24", fill: "currentColor", children: /* @__PURE__ */ jsx19("path", { d: "M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3a1 1 0 0 0-1 1v4a1 1 0 0 0 1 1h3.73L12 18.27v-5.52l4.51 4.51c-.67.43-1.4.76-2.18.98v2.06a8.99 8.99 0 0 0 3.65-1.49L19.73 21 21 19.73l-9-9L4.27 3zM12 4.06L7.22 7.54 12 12.31V4.06z" }) });
+var QuestionMarkIcon = () => /* @__PURE__ */ jsx19("svg", { xmlns: "http://www.w3.org/2000/svg", viewBox: "0 0 24 24", fill: "currentColor", children: /* @__PURE__ */ jsx19("path", { d: "M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17h-2v-2h2v2zm2.07-7.75l-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H8c0-2.21 1.79-4 4-4s4 1.79 4 4c0 .88-.36 1.68-.93 2.25z" }) });
+var TrophyIcon = () => /* @__PURE__ */ jsx19("svg", { xmlns: "http://www.w3.org/2000/svg", viewBox: "0 0 24 24", fill: "currentColor", children: /* @__PURE__ */ jsx19("path", { d: "M19 5h-2V3H7v2H5c-1.1 0-2 .9-2 2v1c0 2.55 1.92 4.63 4.39 4.94.63 1.5 1.98 2.63 3.61 2.96V19H7v2h10v-2h-4v-3.1c1.63-.33 2.98-1.46 3.61-2.96C19.08 12.63 21 10.55 21 8V7c0-1.1-.9-2-2-2zM5 8V7h2v3.82C5.84 10.4 5 9.3 5 8zm7 6c-1.65 0-3-1.35-3-3V3h6v10c0 1.65-1.35 3-3 3zm7-6c0 1.3-.84 2.4-2 2.82V7h2v1z" }) });
 var App = () => {
   const {
     board,
@@ -3624,6 +4140,7 @@ var App = () => {
     autoAdjustLevel,
     isLabUnlocked,
     isAiLearningEnabled,
+    isScreenShakeEnabled,
     showUnlockModal,
     showGameOverModal,
     levelChange,
@@ -3640,6 +4157,9 @@ var App = () => {
     isTutorialInteractive,
     showRulesModal,
     confirmAction,
+    highlightedPath,
+    isShaking,
+    mascotMessage,
     // Personalization
     playerName,
     playerPiece,
@@ -3657,13 +4177,9 @@ var App = () => {
   const [waitingWorker, setWaitingWorker] = useState9(null);
   const [showUpdatePrompt, setShowUpdatePrompt] = useState9(false);
   const wakeLock = useRef5(null);
-  useEffect5(() => {
+  useEffect6(() => {
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("./sw.js").then((registration) => {
-        if (registration.waiting) {
-          setWaitingWorker(registration.waiting);
-          setShowUpdatePrompt(true);
-        }
         registration.addEventListener("updatefound", () => {
           const newWorker = registration.installing;
           if (newWorker) {
@@ -3691,10 +4207,10 @@ var App = () => {
       setShowUpdatePrompt(false);
     }
   };
-  useEffect5(() => {
+  useEffect6(() => {
     document.body.className = `theme-${theme}`;
   }, [theme]);
-  useEffect5(() => {
+  useEffect6(() => {
     const handleContextMenu = (e) => {
       e.preventDefault();
     };
@@ -3703,7 +4219,7 @@ var App = () => {
       document.removeEventListener("contextmenu", handleContextMenu);
     };
   }, []);
-  useEffect5(() => {
+  useEffect6(() => {
     const requestWakeLock = async () => {
       if ("wakeLock" in navigator) {
         try {
@@ -3733,36 +4249,37 @@ var App = () => {
     };
   }, []);
   const isBoardDisabled = isThinking || isSimulating || isTutorialActive && !isTutorialInteractive || !!animationInfo;
-  return /* @__PURE__ */ jsxs16("div", { className: "main-container mx-auto p-2.5 flex flex-col items-center gap-5 max-w-lg lg:max-w-6xl lg:grid lg:grid-cols-[minmax(350px,_1fr)_1.5fr] lg:grid-rows-[auto_1fr] lg:[grid-template-areas:'title_game'_'info_game'] lg:items-start lg:gap-10", children: [
+  return /* @__PURE__ */ jsxs16("div", { className: `main-container mx-auto p-2.5 flex flex-col items-center gap-5 max-w-lg lg:max-w-6xl lg:grid lg:grid-cols-[minmax(350px,_1fr)_1.5fr] lg:grid-rows-[auto_1fr] lg:[grid-template-areas:'title_game'_'info_game'] lg:items-start lg:gap-10 ${isShaking && isScreenShakeEnabled ? "screen-shake" : ""}`, children: [
     /* @__PURE__ */ jsxs16("div", { className: "order-1 w-full lg:[grid-area:title]", children: [
-      /* @__PURE__ */ jsx17(
+      /* @__PURE__ */ jsx19(
         Header_default,
         {
-          isThinking: isThinking || isSimulating
+          isThinking: isThinking || isSimulating,
+          mascotMessage
         }
       ),
       /* @__PURE__ */ jsxs16("div", { className: "flex flex-row items-center justify-center gap-4 w-full mt-2", children: [
-        /* @__PURE__ */ jsx17(
+        /* @__PURE__ */ jsx19(
           "button",
           {
             onClick: actions.toggleMute,
             "aria-label": "Mute sound",
             title: isMuted ? "Unmute" : "Mute",
             className: "w-11 h-11 p-2 rounded-full cursor-pointer flex-shrink-0 header-button",
-            children: isMuted ? /* @__PURE__ */ jsx17(VolumeOffIcon, {}) : /* @__PURE__ */ jsx17(VolumeOnIcon, {})
+            children: isMuted ? /* @__PURE__ */ jsx19(VolumeOffIcon, {}) : /* @__PURE__ */ jsx19(VolumeOnIcon, {})
           }
         ),
-        /* @__PURE__ */ jsx17(
+        /* @__PURE__ */ jsx19(
           "button",
           {
             onClick: actions.openRulesModal,
             "aria-label": "How to Play",
             title: "How to Play",
             className: "w-11 h-11 p-2 rounded-full cursor-pointer flex-shrink-0 header-button",
-            children: /* @__PURE__ */ jsx17(QuestionMarkIcon, {})
+            children: /* @__PURE__ */ jsx19(QuestionMarkIcon, {})
           }
         ),
-        /* @__PURE__ */ jsx17(
+        /* @__PURE__ */ jsx19(
           "button",
           {
             onClick: () => {
@@ -3772,13 +4289,13 @@ var App = () => {
             "aria-label": "Player Stats",
             title: "Player Stats",
             className: "w-11 h-11 p-2 rounded-full cursor-pointer flex-shrink-0 header-button",
-            children: /* @__PURE__ */ jsx17(TrophyIcon, {})
+            children: /* @__PURE__ */ jsx19(TrophyIcon, {})
           }
         )
       ] })
     ] }),
     /* @__PURE__ */ jsxs16("main", { className: "game-area order-2 flex flex-col items-center w-full lg:min-w-[525px] lg:justify-center lg:[grid-area:game]", children: [
-      /* @__PURE__ */ jsx17(
+      /* @__PURE__ */ jsx19(
         Status_default,
         {
           statusText: gameStatus,
@@ -3793,7 +4310,7 @@ var App = () => {
           gameOver
         }
       ),
-      /* @__PURE__ */ jsx17(
+      /* @__PURE__ */ jsx19(
         Board_default,
         {
           board,
@@ -3808,11 +4325,13 @@ var App = () => {
           adaptiveLevel,
           gameMode,
           playerPiece,
-          playerOPiece
+          playerOPiece,
+          highlightedPath,
+          onCellHover: actions.handleCellHover
         }
       )
     ] }),
-    /* @__PURE__ */ jsx17("aside", { className: "info-area order-3 flex flex-col gap-5 w-full items-center lg:justify-start lg:[grid-area:info]", children: /* @__PURE__ */ jsx17(
+    /* @__PURE__ */ jsx19("aside", { className: "info-area order-3 flex flex-col gap-5 w-full items-center lg:justify-start lg:[grid-area:info]", children: /* @__PURE__ */ jsx19(
       Controls_default,
       {
         gameMode,
@@ -3825,6 +4344,8 @@ var App = () => {
         onExportMemory: actions.exportMemory,
         isAnimationEnabled,
         onToggleAnimation: actions.toggleAnimationEnabled,
+        isScreenShakeEnabled,
+        onToggleScreenShakeEnabled: actions.toggleScreenShakeEnabled,
         theme,
         onToggleTheme: actions.toggleTheme,
         isHapticEnabled,
@@ -3855,7 +4376,7 @@ var App = () => {
         isTutorialActive
       }
     ) }),
-    isTutorialActive && /* @__PURE__ */ jsx17(
+    isTutorialActive && /* @__PURE__ */ jsx19(
       TutorialMessage_default,
       {
         text: tutorialText,
@@ -3864,25 +4385,25 @@ var App = () => {
         onSkip: actions.endTutorial
       }
     ),
-    installPrompt.visible && !isTutorialActive && /* @__PURE__ */ jsx17(
+    installPrompt.visible && !isTutorialActive && /* @__PURE__ */ jsx19(
       InstallPrompt_default,
       {
         onInstall: installPrompt.trigger,
         onDismiss: installPrompt.dismiss
       }
     ),
-    showUpdatePrompt && /* @__PURE__ */ jsx17(UpdatePrompt_default, { onUpdate: handleUpdate }),
-    confirmAction && confirmAction.isOpen && /* @__PURE__ */ jsx17(
+    showUpdatePrompt && /* @__PURE__ */ jsx19(UpdatePrompt_default, { onUpdate: handleUpdate }),
+    confirmAction && confirmAction.isOpen && /* @__PURE__ */ jsx19(
       ConfirmModal_default,
       {
         title: confirmAction.title,
         message: confirmAction.message,
         confirmText: confirmAction.confirmText,
-        onConfirm: confirmAction.onConfirm,
+        onConfirm: actions.handleConfirmAction,
         onCancel: actions.cancelConfirmAction
       }
     ),
-    showPlayerStatsModal && /* @__PURE__ */ jsx17(
+    showPlayerStatsModal && /* @__PURE__ */ jsx19(
       PlayerStatsModal_default,
       {
         onClose: () => {
@@ -3895,7 +4416,7 @@ var App = () => {
         isLabUnlocked
       }
     ),
-    showRulesModal && /* @__PURE__ */ jsx17(
+    showRulesModal && /* @__PURE__ */ jsx19(
       RulesModal_default,
       {
         onClose: actions.closeRulesModal,
@@ -3905,8 +4426,8 @@ var App = () => {
         }
       }
     ),
-    showUnlockModal && /* @__PURE__ */ jsx17(UnlockModal_default, { onDismiss: actions.dismissUnlockModal }),
-    showGameOverModal && /* @__PURE__ */ jsx17(
+    showUnlockModal && /* @__PURE__ */ jsx19(UnlockModal_default, { onDismiss: actions.dismissUnlockModal }),
+    showGameOverModal && /* @__PURE__ */ jsx19(
       GameOverModal_default,
       {
         board,
@@ -3927,12 +4448,12 @@ var App = () => {
 var App_default = App;
 
 // index.tsx
-import { jsx as jsx18 } from "react/jsx-runtime";
+import { jsx as jsx20 } from "react/jsx-runtime";
 var rootElement = document.getElementById("root");
 if (!rootElement) {
   throw new Error("Could not find root element to mount to");
 }
 var root = ReactDOM.createRoot(rootElement);
 root.render(
-  /* @__PURE__ */ jsx18(React9.StrictMode, { children: /* @__PURE__ */ jsx18(App_default, {}) })
+  /* @__PURE__ */ jsx20(React9.StrictMode, { children: /* @__PURE__ */ jsx20(App_default, {}) })
 );
