@@ -1,4 +1,4 @@
-const CACHE_NAME = 'caz-connect-cache-v1.1.4';
+const CACHE_NAME = 'caz-connect-cache-v1.1.5';
 const URLS_TO_CACHE = [
   './',
   './index.html',

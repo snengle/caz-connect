@@ -1,14 +1,14 @@
 {
   "name": "caz-connect",
-  "version": "1.0.0",
+  "version": "1.1.5",
   "description": "Caz Connect: A Game of Gravity & Connection",
   "private": true,
   "scripts": {
-    "build": "node scripts/build.js",
+    "build": "esbuild index.tsx --bundle --outfile=index.js --format=esm --jsx=automatic --external:react --external:react-dom --external:@google/genai",
     "start": "npm run build && npx serve ."
   },
   "devDependencies": {
-    "esbuild": "^0.20.2",
+    "esbuild": "^0.27.0",
     "serve": "^14.2.1",
     "typescript": "^5.4.5"
   }
